@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Four Flags</title>
+<style>
+  :root{
+    --ink:#07131c;
+    --ink-2:#0d2030;
+    --line:rgba(190,214,230,.16);
+    --text:#dce9f2;
+    --dim:#7d97a8;
+    --f0:#d4453b;
+    --f1:#e6a428;
+    --f2:#3b8fd4;
+    --f3:#3fa87a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--ink)}
+  body{
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    color:var(--text);
+  }
+  canvas{display:block;position:fixed;inset:0}
+
+  .panel{
+    position:fixed;
+    background:linear-gradient(180deg,rgba(9,22,32,.93),rgba(7,16,24,.93));
+    border:1px solid var(--line);
+    backdrop-filter:blur(8px);
+    -webkit-backdrop-filter:blur(8px);
+  }
+
+  /* ---- faction ledger ---- */
+  #ledger{top:16px;left:16px;width:260px;padding:14px 14px 10px}
+  .eyebrow{
+    font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+    letter-spacing:.22em;text-transform:uppercase;color:var(--dim);
+  }
+  #ledger h1{
+    font-size:23px;font-weight:600;letter-spacing:.01em;
+    margin:7px 0 2px;
+  }
+  #ledger .sub{font-size:12px;color:var(--dim);margin-bottom:13px;font-style:italic}
+
+  .fac{margin-bottom:11px}
+  .fac-top{display:flex;align-items:baseline;gap:7px}
+  .swatch{width:8px;height:8px;flex:none;transform:rotate(45deg)}
+  .fac-name{font-size:13.5px;font-weight:600;flex:1}
+  .fac-num{
+    font:600 14px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-variant-numeric:tabular-nums;
+  }
+  .fac-doc{
+    font:400 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--dim);
+    margin:2px 0 4px 15px;
+  }
+  .bar{height:2px;background:rgba(255,255,255,.08);margin-left:15px}
+  .bar i{display:block;height:100%;width:0;transition:width .45s ease}
+
+  /* ---- inspector ---- */
+  #inspect{top:16px;right:16px;width:214px;padding:13px 14px;display:none}
+  #inspect .who{font-size:15px;font-weight:600;margin:6px 0 9px}
+  .row{
+    display:flex;justify-content:space-between;gap:10px;
+    font:400 11px/1.9 ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  .row span:first-child{color:var(--dim);letter-spacing:.05em}
+  .row span:last-child{font-variant-numeric:tabular-nums}
+  #inspect .hint{font-size:10.5px;color:var(--dim);margin-top:9px;font-style:italic;
+    font-family:inherit;border-top:1px solid var(--line);padding-top:8px}
+
+  /* ---- controls ---- */
+  #dock{
+    bottom:16px;left:50%;transform:translateX(-50%);
+    display:flex;align-items:center;gap:5px;padding:7px 8px;
+  }
+  button{
+    font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+    letter-spacing:.14em;text-transform:uppercase;
+    color:var(--text);background:transparent;
+    border:1px solid var(--line);padding:8px 11px;cursor:pointer;
+    transition:background .15s,border-color .15s;
+  }
+  button:hover{background:rgba(255,255,255,.07)}
+  button:focus-visible{outline:2px solid var(--f1);outline-offset:1px}
+  button.on{background:rgba(230,164,40,.16);border-color:rgba(230,164,40,.5)}
+  .div{width:1px;height:20px;background:var(--line);margin:0 4px}
+  #dock label{
+    font:600 10px/1 ui-monospace,monospace;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--dim);padding-left:6px;
+  }
+  input[type=range]{width:88px;accent-color:var(--f1);cursor:pointer}
+
+  #keys{
+    position:fixed;bottom:18px;left:16px;
+    font:400 10px/1.7 ui-monospace,monospace;color:var(--dim);
+    letter-spacing:.05em;
+  }
+  @media (max-width:760px){
+    #ledger{width:206px;padding:11px}
+    #inspect{display:none!important}
+    #keys{display:none}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="ledger" class="panel">
+  <div class="eyebrow">Treasure delivered</div>
+  <h1>Four Flags</h1>
+  <div class="sub">Four crews. One sea. No rules.</div>
+  <div id="facs"></div>
+</div>
+
+<div id="inspect" class="panel">
+  <div class="eyebrow">Vessel</div>
+  <div class="who" id="i-who">—</div>
+  <div class="row"><span>Crew</span><span id="i-crew">—</span></div>
+  <div class="row"><span>Hold</span><span id="i-hold">—</span></div>
+  <div class="row"><span>Hull</span><span id="i-hull">—</span></div>
+  <div class="row"><span>Orders</span><span id="i-state">—</span></div>
+  <div class="row"><span>Hauled</span><span id="i-haul">—</span></div>
+  <div class="hint" id="i-doc">—</div>
+</div>
+
+<div id="dock" class="panel">
+  <button id="b-top">Top down</button>
+  <button id="b-follow">Follow leader</button>
+  <div class="div"></div>
+  <button id="b-pause">Pause</button>
+  <label for="spd">Speed</label>
+  <input id="spd" type="range" min="0.25" max="4" step="0.25" value="1">
+  <div class="div"></div>
+  <button id="b-reset">New sea</button>
+</div>
+
+<div id="keys">
+  drag orbit · scroll zoom · right-drag pan · click a ship
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ============================================================
+   FOUR FLAGS  —  four AI pirate crews, one sea
+   Session-one core. Tune the FACTIONS table first; that's
+   where all the interesting behaviour lives.
+   ============================================================ */
+
+// ---------- world constants ----------
+const SEA      = 240;   // ocean plane size
+const BOUND    = 78;    // ships stay inside this radius
+const CAPACITY = 3;     // crates a hold can carry
+const MAX_CREW = 10;
+const BASE_SPD = 7.2;   // units/sec at 3 crew
+
+// ---------- the four crews ----------
+// caution    0..1  how readily it runs from a fight
+// greed      0..1  fraction of hold filled before sailing home
+// aggression 0..1  preference for robbing ships over gathering
+// reach      0..1  how far from home it will sail
+const FACTIONS = [
+  { name:'Ironhold',   doc:'Takes what others carry', color:0xd4453b,
+    caution:0.12, greed:1.00, aggression:0.88, reach:1.00 },
+  { name:'Goldhaven',  doc:'Hoards early, risks little', color:0xe6a428,
+    caution:0.78, greed:0.34, aggression:0.08, reach:0.58 },
+  { name:'Tempest',    doc:'Sails far, holds out for full', color:0x3b8fd4,
+    caution:0.34, greed:1.00, aggression:0.42, reach:1.00 },
+  { name:'Stonewatch', doc:'Never strays from home water', color:0x3fa87a,
+    caution:0.92, greed:0.62, aggression:0.18, reach:0.40 },
+];
+
+// ---------- shared wave field ----------
+// Identical maths lives in the vertex shader below. If you change
+// one you MUST change the other or the ships float above the water.
+function waveH(x, z, t){
+  return Math.sin(x*0.12 + t*0.90)*0.55
+       + Math.sin(z*0.16 - t*1.05)*0.45
+       + Math.sin((x+z)*0.075 + t*0.65)*0.70
+       + Math.sin((x-z)*0.210 + t*1.40)*0.18;
+}
+
+// ---------- renderer / scene ----------
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1b28);
+scene.fog = new THREE.Fog(0x0b1b28, 130, 260);
+
+const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.5, 900);
+
+const sun = new THREE.Vector3(0.42, 0.78, 0.28).normalize();
+scene.add(new THREE.HemisphereLight(0x9fc6e0, 0x0a1a24, 0.85));
+const dir = new THREE.DirectionalLight(0xfff2d8, 1.05);
+dir.position.copy(sun).multiplyScalar(60);
+scene.add(dir);
+
+// ---------- ocean ----------
+const oceanMat = new THREE.ShaderMaterial({
+  uniforms:{
+    uTime:{value:0},
+    uDeep:{value:new THREE.Color(0x0a2f4a)},
+    uShallow:{value:new THREE.Color(0x1d7f95)},
+    uFoam:{value:new THREE.Color(0xdff2f6)},
+    uSun:{value:sun.clone()}
+  },
+  vertexShader:`
+    uniform float uTime;
+    varying vec3 vWorld; varying float vH; varying vec3 vNrm;
+    float waveH(vec2 p, float t){
+      return sin(p.x*0.12 + t*0.90)*0.55
+           + sin(p.y*0.16 - t*1.05)*0.45
+           + sin((p.x+p.y)*0.075 + t*0.65)*0.70
+           + sin((p.x-p.y)*0.210 + t*1.40)*0.18;
+    }
+    void main(){
+      vec4 wp = modelMatrix * vec4(position,1.0);
+      float h = waveH(wp.xz, uTime);
+      wp.y += h;
+      float e = 0.7;
+      float hx = waveH(wp.xz+vec2(e,0.), uTime) - waveH(wp.xz-vec2(e,0.), uTime);
+      float hz = waveH(wp.xz+vec2(0.,e), uTime) - waveH(wp.xz-vec2(0.,e), uTime);
+      vNrm = normalize(vec3(-hx, 2.0*e, -hz));
+      vH = h; vWorld = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }`,
+  fragmentShader:`
+    uniform vec3 uDeep, uShallow, uFoam, uSun;
+    varying vec3 vWorld; varying float vH; varying vec3 vNrm;
+    void main(){
+      vec3 n = normalize(vNrm);
+      float lam = max(dot(n, uSun), 0.0);
+      vec3 base = mix(uDeep, uShallow, smoothstep(-1.3, 1.25, vH));
+      float foam = smoothstep(0.92, 1.42, vH);
+      vec3 col = mix(base, uFoam, foam*0.8);
+      col *= 0.52 + 0.58*lam;
+      vec3 v = normalize(cameraPosition - vWorld);
+      float spec = pow(max(dot(n, normalize(uSun+v)), 0.0), 70.0);
+      col += vec3(1.0,0.97,0.88)*spec*0.4;
+      gl_FragColor = vec4(col, 1.0);
+    }`
+});
+const ocean = new THREE.Mesh(new THREE.PlaneGeometry(SEA, SEA, 170, 170), oceanMat);
+ocean.rotation.x = -Math.PI/2;
+scene.add(ocean);
+
+// ---------- helpers ----------
+const M = (c, rough) => new THREE.MeshLambertMaterial({color:c});
+function tone(hex, amt){ // lighten / darken
+  const c = new THREE.Color(hex);
+  c.offsetHSL(0, 0, amt);
+  return c.getHex();
+}
+
+// ---------- islands ----------
+const islands = [];
+function buildIslands(){
+  const n = 7;
+  for(let i=0;i<n;i++){
+    const a = (i/n)*Math.PI*2 + Math.random();
+    const r = 24 + Math.random()*44;
+    const x = Math.cos(a)*r, z = Math.sin(a)*r;
+    const rad = 4.5 + Math.random()*5;
+
+    const g = new THREE.Group();
+    const sand = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad*1.25, 1.3, 9), M(0xd9c48c));
+    sand.position.y = 0.1;
+    const rock = new THREE.Mesh(new THREE.ConeGeometry(rad*0.62, 3.2+Math.random()*3, 7), M(0x6f7a5c));
+    rock.position.y = 2.1;
+    rock.rotation.y = Math.random()*3;
+    g.add(sand, rock);
+
+    // palms
+    for(let p=0;p<2+Math.random()*2;p++){
+      const pa = Math.random()*Math.PI*2, pr = rad*0.55;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.2,2.6,5), M(0x8a6b45));
+      trunk.position.set(Math.cos(pa)*pr, 1.9, Math.sin(pa)*pr);
+      trunk.rotation.z = (Math.random()-0.5)*0.35;
+      const top = new THREE.Mesh(new THREE.ConeGeometry(1.15, 0.85, 6), M(0x3d7a45));
+      top.position.set(trunk.position.x, 3.25, trunk.position.z);
+      g.add(trunk, top);
+    }
+    g.position.set(x, 0, z);
+    scene.add(g);
+    islands.push({x, z, r:rad});
+  }
+}
+
+// ---------- bases ----------
+const bases = [];
+function buildBases(){
+  const d = 60;
+  const spots = [[-d,-d],[d,-d],[d,d],[-d,d]];
+  FACTIONS.forEach((f,i)=>{
+    const [x,z] = spots[i];
+    const g = new THREE.Group();
+
+    const dock = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 9.5, 1.6, 8), M(0xcbb888));
+    dock.position.y = 0.2;
+    const keep = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 3.1, 5.4, 6), M(0x6b6257));
+    keep.position.y = 3.4;
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(3.4, 2.2, 6), M(tone(f.color,-0.14)));
+    roof.position.y = 7.1;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,4,4), M(0x4a4034));
+    pole.position.y = 9.6;
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.4), new THREE.MeshLambertMaterial({color:f.color, side:THREE.DoubleSide}));
+    flag.position.set(1.25, 10.6, 0);
+    g.add(dock, keep, roof, pole, flag);
+    g.position.set(x, 0, z);
+    scene.add(g);
+
+    bases.push({x, z, faction:i, score:0, flag, mesh:g});
+  });
+}
+
+// ---------- ships ----------
+const shipHulls = [];   // raycast targets
+let ships = [];
+
+function makeCrewman(color, isCaptain){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.17, 0.44, 6), M(isCaptain?0x2a2b33:0x7d6f5a));
+  body.position.y = 0.22;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 7, 5), M(0xc99e75));
+  head.position.y = 0.53;
+  g.add(body, head);
+
+  if(isCaptain){
+    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.24, 4), M(0x1b1c22));
+    hat.position.y = 0.68; hat.rotation.y = Math.PI/4;
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.04, 8), M(0x1b1c22));
+    brim.position.y = 0.60;
+    const sword = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.52, 0.035), M(0xd8dde2));
+    sword.position.set(0.19, 0.3, 0.02); sword.rotation.z = -0.45;
+    g.add(hat, brim, sword);
+  }else{
+    const bandana = new THREE.Mesh(new THREE.CylinderGeometry(0.135,0.135,0.1,7), M(color));
+    bandana.position.y = 0.60;
+    g.add(bandana);
+  }
+  return g;
+}
+
+function makeShip(fi){
+  const f = FACTIONS[fi];
+  const outer = new THREE.Group();   // heading
+  const tilt  = new THREE.Group();   // wave pitch/roll
+  outer.add(tilt);
+
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.85, 4.2), M(0x6b4a2f));
+  hull.position.y = 0.42;
+  const bow = new THREE.Mesh(new THREE.ConeGeometry(1.0, 1.9, 4), M(0x6b4a2f));
+  bow.position.set(0, 0.42, 2.9);
+  bow.rotation.set(Math.PI/2, 0, Math.PI/4);
+  bow.scale.set(1, 1, 0.85);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.12, 3.9), M(0xa8865c));
+  deck.position.y = 0.86;
+  const stern = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.9, 0.9), M(0x5c3f28));
+  stern.position.set(0, 1.2, -1.7);
+
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 4.4, 6), M(0x4f3a26));
+  mast.position.y = 3.0;
+  const sail = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2.6),
+    new THREE.MeshLambertMaterial({color:0xeae2cf, side:THREE.DoubleSide}));
+  sail.position.set(0, 3.4, -0.12);
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.62),
+    new THREE.MeshLambertMaterial({color:f.color, side:THREE.DoubleSide}));
+  flag.position.set(0.58, 5.05, 0);
+
+  tilt.add(hull, bow, deck, stern, mast, sail, flag);
+
+  // crew — captain at the wheel, hands forward
+  const crewGroup = new THREE.Group();
+  tilt.add(crewGroup);
+
+  // cargo crates, revealed as the hold fills
+  const crates = [];
+  for(let i=0;i<CAPACITY;i++){
+    const c = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.5,0.55), M(0xb8912f));
+    c.position.set(-0.4 + (i%2)*0.8, 1.18, -0.4 + Math.floor(i/2)*0.7);
+    c.visible = false;
+    tilt.add(c); crates.push(c);
+  }
+
+  scene.add(outer);
+  hull.userData.shipRef = true;
+  shipHulls.push(hull);
+
+  return {outer, tilt, hull, crewGroup, crates, flag};
+}
+
+function spawnShip(fi){
+  const f = FACTIONS[fi], b = bases[fi];
+  const v = makeShip(fi);
+  const s = {
+    fi, ...v,
+    x: b.x + (Math.random()-0.5)*14,
+    z: b.z + (Math.random()-0.5)*14,
+    heading: Math.random()*Math.PI*2,
+    crew: 3, cargo: 0, hull: 3, hauled: 0,
+    state:'SEEK', target:null, cd:0, sway:Math.random()*10,
+    alive:true, respawn:0
+  };
+  v.hull.userData.ship = s;
+  setCrew(s);
+  ships.push(s);
+  return s;
+}
+
+function setCrew(s){
+  const g = s.crewGroup;
+  while(g.children.length) g.remove(g.children[0]);
+  const n = Math.min(s.crew, MAX_CREW);
+  for(let i=0;i<n;i++){
+    const c = makeCrewman(FACTIONS[s.fi].color, i===0);
+    if(i===0){ c.position.set(0, 0.92, -1.35); }
+    else {
+      const row = Math.floor((i-1)/2), col = (i-1)%2;
+      c.position.set(-0.45 + col*0.9, 0.92, 0.9 - row*0.72);
+    }
+    c.rotation.y = Math.PI + (Math.random()-0.5)*0.6;
+    g.add(c);
+  }
+}
+
+// ---------- treasure ----------
+let treasure = [];
+const treasureGeo = new THREE.BoxGeometry(0.85, 0.7, 0.85);
+const treasureMat = M(0xe0b83c);
+
+function spawnTreasure(){
+  let x, z;
+  if(Math.random() < 0.4 && islands.length){          // washed up on a beach
+    const i = islands[Math.floor(Math.random()*islands.length)];
+    const a = Math.random()*Math.PI*2;
+    x = i.x + Math.cos(a)*(i.r+1.5);
+    z = i.z + Math.sin(a)*(i.r+1.5);
+  }else{                                               // adrift
+    const a = Math.random()*Math.PI*2, r = Math.random()*BOUND*0.92;
+    x = Math.cos(a)*r; z = Math.sin(a)*r;
+  }
+  const m = new THREE.Mesh(treasureGeo, treasureMat);
+  m.position.set(x, 0, z);
+  m.rotation.y = Math.random()*3;
+  scene.add(m);
+  treasure.push({x, z, mesh:m, taken:false});
+}
+
+// ---------- sim ----------
+const dist = (ax,az,bx,bz)=>Math.hypot(ax-bx, az-bz);
+
+function nearestTreasure(s){
+  const f = FACTIONS[s.fi], b = bases[s.fi];
+  let best=null, bd=1e9;
+  for(const t of treasure){
+    if(t.taken) continue;
+    if(dist(t.x,t.z,b.x,b.z) > BOUND*2*f.reach) continue;
+    const d = dist(s.x,s.z,t.x,t.z);
+    if(d<bd){ bd=d; best=t; }
+  }
+  return best;
+}
+
+function nearestPrey(s){
+  const f = FACTIONS[s.fi];
+  let best=null, bd=1e9;
+  for(const o of ships){
+    if(!o.alive || o.fi===s.fi) continue;
+    const d = dist(s.x,s.z,o.x,o.z);
+    // prefer loaded ships — that's the whole point of raiding
+    const score = d - o.cargo*14;
+    if(score<bd && d < 55*f.reach){ bd=score; best=o; }
+  }
+  return best;
+}
+
+function threatNear(s){
+  for(const o of ships){
+    if(!o.alive || o.fi===s.fi) continue;
+    if(dist(s.x,s.z,o.x,o.z) < 16) return o;
+  }
+  return null;
+}
+
+function think(s){
+  const f = FACTIONS[s.fi], b = bases[s.fi];
+
+  if(s.cargo >= Math.max(1, Math.round(CAPACITY*f.greed))){
+    s.state='RETURN'; s.target={x:b.x,z:b.z}; return;
+  }
+  const threat = threatNear(s);
+  if(threat && Math.random() < f.caution){
+    s.state='FLEE';
+    s.target={x:s.x+(s.x-threat.x)*2, z:s.z+(s.z-threat.z)*2};
+    return;
+  }
+  if(Math.random() < f.aggression*0.5){
+    const prey = nearestPrey(s);
+    if(prey){ s.state='HUNT'; s.target=prey; return; }
+  }
+  const t = nearestTreasure(s);
+  if(t){ s.state='SEEK'; s.target=t; return; }
+  s.state='RETURN'; s.target={x:b.x,z:b.z};
+}
+
+function fight(a, b){
+  const roll = x => x.crew*0.8 + x.hull*1.1 + Math.random()*5;
+  const win = roll(a) >= roll(b) ? a : b;
+  const lose = win===a ? b : a;
+
+  const stolen = lose.cargo;
+  win.cargo = Math.min(CAPACITY, win.cargo + stolen);
+  lose.cargo = 0;
+  lose.hull -= 1;
+  if(win.crew < MAX_CREW && Math.random()<0.45){ win.crew++; setCrew(win); }
+  if(lose.crew > 1 && Math.random()<0.6){ lose.crew--; setCrew(lose); }
+
+  if(lose.hull <= 0){
+    lose.alive = false;
+    lose.respawn = 6 + Math.random()*4;
+    lose.outer.visible = false;
+  }
+  a.cd = b.cd = 1.6;
+}
+
+function step(dt, t){
+  // treasure top-up
+  if(treasure.filter(x=>!x.taken).length < 26 && Math.random() < dt*3.2) spawnTreasure();
+
+  for(const s of ships){
+    if(!s.alive){
+      s.respawn -= dt;
+      if(s.respawn <= 0){
+        const b = bases[s.fi];
+        s.alive=true; s.hull=3; s.crew=3; s.cargo=0;
+        s.x = b.x + (Math.random()-0.5)*12;
+        s.z = b.z + (Math.random()-0.5)*12;
+        s.outer.visible = true;
+        setCrew(s);
+      }
+      continue;
+    }
+
+    s.cd -= dt;
+    if(!s.target || Math.random() < dt*1.4) think(s);
+
+    let tx, tz;
+    if(s.state==='HUNT' && s.target && s.target.alive===false) think(s);
+    if(s.target){ tx = s.target.x; tz = s.target.z; } else { tx=s.x; tz=s.z; }
+
+    // steer
+    const want = Math.atan2(tx-s.x, tz-s.z);
+    let da = want - s.heading;
+    while(da >  Math.PI) da -= Math.PI*2;
+    while(da < -Math.PI) da += Math.PI*2;
+    s.heading += Math.max(-1.9*dt, Math.min(1.9*dt, da*2.2*dt*3));
+
+    // move — heavier holds sail slower
+    const speed = BASE_SPD * (1 + (s.crew-3)*0.035) * (1 - s.cargo*0.07);
+    s.x += Math.sin(s.heading)*speed*dt;
+    s.z += Math.cos(s.heading)*speed*dt;
+
+    // keep inside the sea
+    const r = Math.hypot(s.x, s.z);
+    if(r > BOUND){ s.x *= BOUND/r; s.z *= BOUND/r; s.target=null; }
+
+    // pick up treasure
+    for(const tr of treasure){
+      if(tr.taken) continue;
+      if(s.cargo >= CAPACITY) break;
+      if(dist(s.x,s.z,tr.x,tr.z) < 3.0){
+        tr.taken = true;
+        scene.remove(tr.mesh);
+        s.cargo++;
+      }
+    }
+
+    // deliver
+    const b = bases[s.fi];
+    if(s.cargo > 0 && dist(s.x,s.z,b.x,b.z) < 10){
+      b.score += s.cargo; s.hauled += s.cargo; s.cargo = 0;
+      if(s.hull < 3) s.hull++;
+      if(s.crew < MAX_CREW && Math.random()<0.3){ s.crew++; setCrew(s); }
+    }
+
+    // combat
+    if(s.cd <= 0){
+      for(const o of ships){
+        if(!o.alive || o.fi===s.fi || o.cd>0) continue;
+        if(dist(s.x,s.z,o.x,o.z) < 4.2){ fight(s,o); break; }
+      }
+    }
+
+    // ---- presentation ----
+    const h  = waveH(s.x, s.z, t);
+    const hx = waveH(s.x+1.4, s.z, t) - waveH(s.x-1.4, s.z, t);
+    const hz = waveH(s.x, s.z+1.4, t) - waveH(s.x, s.z-1.4, t);
+    s.outer.position.set(s.x, h - 0.35, s.z);
+    s.outer.rotation.y = s.heading;
+    s.sway += dt;
+    s.tilt.rotation.x =  hz*0.20 + Math.sin(s.sway*1.15)*0.030;
+    s.tilt.rotation.z = -hx*0.24 + Math.sin(s.sway*0.83+1.3)*0.055;
+    s.flag.rotation.y = Math.sin(t*2.2 + s.sway)*0.35;
+    for(let i=0;i<CAPACITY;i++) s.crates[i].visible = i < s.cargo;
+  }
+
+  // bob the loose treasure
+  for(const tr of treasure){
+    if(tr.taken) continue;
+    tr.mesh.position.y = waveH(tr.x, tr.z, t) + 0.25;
+    tr.mesh.rotation.z = Math.sin(t*1.1 + tr.x)*0.08;
+  }
+}
+
+// ---------- camera rig (hand-rolled: no OrbitControls in r128) ----------
+const cam = {
+  target:new THREE.Vector3(0,0,0),
+  dist:150, az:Math.PI*0.25, pol:0.30, follow:false
+};
+function applyCam(){
+  cam.pol = Math.max(0.06, Math.min(1.50, cam.pol));
+  cam.dist = Math.max(14, Math.min(320, cam.dist));
+  const y = Math.cos(cam.pol)*cam.dist;
+  const rr = Math.sin(cam.pol)*cam.dist;
+  camera.position.set(
+    cam.target.x + Math.sin(cam.az)*rr,
+    cam.target.y + y,
+    cam.target.z + Math.cos(cam.az)*rr
+  );
+  camera.lookAt(cam.target);
+}
+let drag=null, lx=0, ly=0;
+canvas.addEventListener('pointerdown', e=>{
+  drag = (e.button===2 || e.shiftKey) ? 'pan' : 'orbit';
+  lx=e.clientX; ly=e.clientY; canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e=>{
+  if(!drag) return;
+  const dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY;
+  if(drag==='orbit'){ cam.az -= dx*0.005; cam.pol -= dy*0.005; }
+  else{
+    cam.follow=false; syncFollowBtn();
+    const s = cam.dist*0.0016;
+    const f = new THREE.Vector3(Math.sin(cam.az),0,Math.cos(cam.az));
+    const r = new THREE.Vector3(f.z,0,-f.x);
+    cam.target.addScaledVector(r, -dx*s).addScaledVector(f, -dy*s);
+  }
+  applyCam();
+});
+addEventListener('pointerup', ()=>drag=null);
+canvas.addEventListener('contextmenu', e=>e.preventDefault());
+canvas.addEventListener('wheel', e=>{
+  e.preventDefault();
+  cam.dist *= (1 + Math.sign(e.deltaY)*0.11);
+  applyCam();
+}, {passive:false});
+
+// ---------- inspector ----------
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+let picked = null;
+canvas.addEventListener('click', e=>{
+  ptr.x = (e.clientX/innerWidth)*2 - 1;
+  ptr.y = -(e.clientY/innerHeight)*2 + 1;
+  ray.setFromCamera(ptr, camera);
+  const hit = ray.intersectObjects(shipHulls, false)[0];
+  picked = hit ? hit.object.userData.ship : null;
+  drawInspector();
+});
+const iEl = id => document.getElementById(id);
+function drawInspector(){
+  const p = document.getElementById('inspect');
+  if(!picked){ p.style.display='none'; return; }
+  const f = FACTIONS[picked.fi];
+  p.style.display='block';
+  p.style.borderColor = '#'+new THREE.Color(f.color).getHexString()+'66';
+  iEl('i-who').textContent   = f.name;
+  iEl('i-who').style.color   = '#'+new THREE.Color(f.color).getHexString();
+  iEl('i-crew').textContent  = picked.alive ? picked.crew + ' / ' + MAX_CREW : '—';
+  iEl('i-hold').textContent  = picked.cargo + ' / ' + CAPACITY;
+  iEl('i-hull').textContent  = picked.alive ? '█'.repeat(picked.hull) + '░'.repeat(3-picked.hull) : 'sunk';
+  iEl('i-state').textContent = picked.alive ? picked.state.toLowerCase() : 'refitting';
+  iEl('i-haul').textContent  = picked.hauled;
+  iEl('i-doc').textContent   = f.doc;
+}
+
+// ---------- ledger ----------
+function buildLedger(){
+  const wrap = document.getElementById('facs');
+  wrap.innerHTML = '';
+  FACTIONS.forEach((f,i)=>{
+    const hex = '#'+new THREE.Color(f.color).getHexString();
+    wrap.insertAdjacentHTML('beforeend', `
+      <div class="fac">
+        <div class="fac-top">
+          <div class="swatch" style="background:${hex}"></div>
+          <div class="fac-name">${f.name}</div>
+          <div class="fac-num" id="sc${i}" style="color:${hex}">0</div>
+        </div>
+        <div class="fac-doc">${f.doc}</div>
+        <div class="bar"><i id="bar${i}" style="background:${hex}"></i></div>
+      </div>`);
+  });
+}
+function drawLedger(){
+  const max = Math.max(1, ...bases.map(b=>b.score));
+  bases.forEach((b,i)=>{
+    document.getElementById('sc'+i).textContent = b.score;
+    document.getElementById('bar'+i).style.width = (b.score/max*100)+'%';
+  });
+}
+
+// ---------- controls ----------
+let paused=false, rate=1;
+const bFollow = document.getElementById('b-follow');
+const syncFollowBtn = ()=>bFollow.classList.toggle('on', cam.follow);
+
+document.getElementById('b-top').onclick = ()=>{
+  cam.follow=false; syncFollowBtn();
+  cam.target.set(0,0,0); cam.dist=150; cam.az=Math.PI*0.25; cam.pol=0.30; applyCam();
+};
+bFollow.onclick = ()=>{ cam.follow = !cam.follow; syncFollowBtn(); if(cam.follow) cam.dist=Math.min(cam.dist,34); };
+document.getElementById('b-pause').onclick = e=>{
+  paused=!paused; e.target.classList.toggle('on', paused);
+  e.target.textContent = paused ? 'Resume' : 'Pause';
+};
+document.getElementById('spd').oninput = e=> rate = parseFloat(e.target.value);
+document.getElementById('b-reset').onclick = ()=> reset();
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---------- boot / reset ----------
+function reset(){
+  for(const s of ships) scene.remove(s.outer);
+  for(const t of treasure) if(!t.taken) scene.remove(t.mesh);
+  ships = []; treasure = []; shipHulls.length = 0; picked = null;
+  bases.forEach(b=>b.score=0);
+  for(let i=0;i<FACTIONS.length;i++) for(let k=0;k<3;k++) spawnShip(i);
+  for(let i=0;i<22;i++) spawnTreasure();
+  drawInspector(); drawLedger();
+}
+
+buildIslands();
+buildBases();
+buildLedger();
+reset();
+applyCam();
+
+// ---------- loop ----------
+let last = performance.now(), simT = 0, ledgerCd = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt = Math.min((now-last)/1000, 0.05); last = now;
+  if(!paused){
+    dt *= rate;
+    simT += dt;
+    step(dt, simT);
+  }
+  oceanMat.uniforms.uTime.value = simT;
+
+  if(cam.follow){
+    const lead = ships.filter(s=>s.alive).sort((a,b)=>b.cargo-a.cargo || b.hauled-a.hauled)[0];
+    if(lead) cam.target.lerp(lead.outer.position, 0.06);
+  }
+  applyCam();
+
+  ledgerCd -= dt;
+  if(ledgerCd <= 0){ drawLedger(); if(picked) drawInspector(); ledgerCd = 0.3; }
+
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
