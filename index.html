@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Four Flags</title>
+<title>p.ai.rates</title>
 <style>
   :root{
     --ink:#07131c;
@@ -112,7 +112,7 @@
 
 <div id="ledger" class="panel">
   <div class="eyebrow">Treasure delivered</div>
-  <h1>Four Flags</h1>
+  <h1>p.ai.rates</h1>
   <div class="sub">Four crews. One sea. No rules.</div>
   <div id="facs"></div>
 </div>
@@ -146,13 +146,14 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 /* ============================================================
-   FOUR FLAGS  —  four AI pirate crews, one sea
+   p.ai.rates  —  four AI pirate crews, one sea
    Session-one core. Tune the FACTIONS table first; that's
    where all the interesting behaviour lives.
    ============================================================ */
 
 // ---------- world constants ----------
-const SEA      = 240;   // ocean plane size
+const SEA_R    = 170;   // ocean disc radius
+const RING_R   = 143;   // mountains encircling the sea
 const BOUND    = 78;    // ships stay inside this radius
 const CAPACITY = 3;     // crates a hold can carry
 const MAX_CREW = 10;
@@ -177,11 +178,17 @@ const FACTIONS = [
 // ---------- shared wave field ----------
 // Identical maths lives in the vertex shader below. If you change
 // one you MUST change the other or the ships float above the water.
+// Six non-harmonic swells on irregular headings, sampled through a slow
+// domain warp so crests wander instead of marching in straight ranks.
 function waveH(x, z, t){
-  return Math.sin(x*0.12 + t*0.90)*0.55
-       + Math.sin(z*0.16 - t*1.05)*0.45
-       + Math.sin((x+z)*0.075 + t*0.65)*0.70
-       + Math.sin((x-z)*0.210 + t*1.40)*0.18;
+  const X = x + Math.sin(z*0.043 + t*0.31)*2.60;
+  const Z = z + Math.sin(x*0.037 - t*0.27)*2.60;
+  return Math.sin(X*0.098 + Z*0.020 + t*0.90)*0.52
+       + Math.sin(X*0.042 - Z*0.128 + t*1.07)*0.44
+       + Math.sin(X*0.044 + Z*0.043 + t*0.61)*0.68
+       + Math.sin(X*0.118 - Z*0.146 + t*1.33)*0.21
+       + Math.sin(X*0.225 - Z*0.116 + t*1.61)*0.12
+       + Math.sin(X*0.079 - Z*0.319 + t*1.94)*0.07;
 }
 
 // ---------- renderer / scene ----------
@@ -190,35 +197,66 @@ const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b1b28);
-scene.fog = new THREE.Fog(0x0b1b28, 130, 260);
+const HAZE   = 0xbcd9e8;   // horizon colour — sky, fog and ocean all share it
+const SKYTOP = 0x3d86c4;
 
-const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.5, 900);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(HAZE);
+scene.fog = new THREE.Fog(HAZE, 150, 330);
+
+const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.5, 2200);
 
 const sun = new THREE.Vector3(0.42, 0.78, 0.28).normalize();
-scene.add(new THREE.HemisphereLight(0x9fc6e0, 0x0a1a24, 0.85));
-const dir = new THREE.DirectionalLight(0xfff2d8, 1.05);
+scene.add(new THREE.HemisphereLight(0xcfe6f5, 0x2c4a3a, 1.00));
+const dir = new THREE.DirectionalLight(0xfff4e0, 1.15);
 dir.position.copy(sun).multiplyScalar(60);
 scene.add(dir);
+
+// ---------- sky dome ----------
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(1400, 32, 18),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false,
+    uniforms:{ uTop:{value:new THREE.Color(SKYTOP)}, uHaze:{value:new THREE.Color(HAZE)} },
+    vertexShader:`
+      varying vec3 vP;
+      void main(){ vP = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader:`
+      uniform vec3 uTop, uHaze;
+      varying vec3 vP;
+      void main(){
+        float h = normalize(vP).y;
+        gl_FragColor = vec4(mix(uHaze, uTop, smoothstep(-0.04, 0.60, h)), 1.0);
+      }`
+  })
+);
+scene.add(sky);
 
 // ---------- ocean ----------
 const oceanMat = new THREE.ShaderMaterial({
   uniforms:{
     uTime:{value:0},
-    uDeep:{value:new THREE.Color(0x0a2f4a)},
-    uShallow:{value:new THREE.Color(0x1d7f95)},
-    uFoam:{value:new THREE.Color(0xdff2f6)},
-    uSun:{value:sun.clone()}
+    uDeep:{value:new THREE.Color(0x0e5570)},
+    uShallow:{value:new THREE.Color(0x39b3c4)},
+    uFoam:{value:new THREE.Color(0xf2fbfd)},
+    uSun:{value:sun.clone()},
+    uHaze:{value:new THREE.Color(HAZE)},
+    uFogNear:{value:150.0},
+    uFogFar:{value:330.0}
   },
   vertexShader:`
     uniform float uTime;
     varying vec3 vWorld; varying float vH; varying vec3 vNrm;
+    // MIRROR OF waveH() IN JS. Change one, change the other.
     float waveH(vec2 p, float t){
-      return sin(p.x*0.12 + t*0.90)*0.55
-           + sin(p.y*0.16 - t*1.05)*0.45
-           + sin((p.x+p.y)*0.075 + t*0.65)*0.70
-           + sin((p.x-p.y)*0.210 + t*1.40)*0.18;
+      float X = p.x + sin(p.y*0.043 + t*0.31)*2.60;
+      float Z = p.y + sin(p.x*0.037 - t*0.27)*2.60;
+      return sin(X*0.098 + Z*0.020 + t*0.90)*0.52
+           + sin(X*0.042 - Z*0.128 + t*1.07)*0.44
+           + sin(X*0.044 + Z*0.043 + t*0.61)*0.68
+           + sin(X*0.118 - Z*0.146 + t*1.33)*0.21
+           + sin(X*0.225 - Z*0.116 + t*1.61)*0.12
+           + sin(X*0.079 - Z*0.319 + t*1.94)*0.07;
     }
     void main(){
       vec4 wp = modelMatrix * vec4(position,1.0);
@@ -232,27 +270,81 @@ const oceanMat = new THREE.ShaderMaterial({
       gl_Position = projectionMatrix * viewMatrix * wp;
     }`,
   fragmentShader:`
-    uniform vec3 uDeep, uShallow, uFoam, uSun;
+    uniform vec3 uDeep, uShallow, uFoam, uSun, uHaze;
+    uniform float uFogNear, uFogFar;
     varying vec3 vWorld; varying float vH; varying vec3 vNrm;
     void main(){
       vec3 n = normalize(vNrm);
       float lam = max(dot(n, uSun), 0.0);
-      vec3 base = mix(uDeep, uShallow, smoothstep(-1.3, 1.25, vH));
-      float foam = smoothstep(0.92, 1.42, vH);
-      vec3 col = mix(base, uFoam, foam*0.8);
-      col *= 0.52 + 0.58*lam;
+      vec3 base = mix(uDeep, uShallow, smoothstep(-1.70, 1.55, vH));
+      float foam = smoothstep(1.14, 1.86, vH);
+      vec3 col = mix(base, uFoam, foam*0.85);
+      col *= 0.60 + 0.55*lam;
       vec3 v = normalize(cameraPosition - vWorld);
       float spec = pow(max(dot(n, normalize(uSun+v)), 0.0), 70.0);
-      col += vec3(1.0,0.97,0.88)*spec*0.4;
+      col += vec3(1.0,0.97,0.88)*spec*0.45;
+      float fg = smoothstep(uFogNear, uFogFar, length(cameraPosition - vWorld));
+      col = mix(col, uHaze, fg);
       gl_FragColor = vec4(col, 1.0);
-    }`
+    }`,
+  side: THREE.DoubleSide
 });
-const ocean = new THREE.Mesh(new THREE.PlaneGeometry(SEA, SEA, 170, 170), oceanMat);
-ocean.rotation.x = -Math.PI/2;
+// Polar disc, built directly in XZ so the shader's wp.xz is still world space.
+// Rings are packed toward the middle where the camera usually sits.
+function buildDisc(radius, rings, segs){
+  const v = [0,0,0], idx = [];
+  for(let r=1;r<=rings;r++){
+    const rad = radius*Math.pow(r/rings, 1.35);
+    for(let s=0;s<segs;s++){
+      const a = (s/segs)*Math.PI*2;
+      v.push(Math.cos(a)*rad, 0, Math.sin(a)*rad);
+    }
+  }
+  for(let s=0;s<segs;s++) idx.push(0, 1+s, 1+((s+1)%segs));
+  for(let r=1;r<rings;r++){
+    const a0 = 1+(r-1)*segs, b0 = 1+r*segs;
+    for(let s=0;s<segs;s++){
+      const s2 = (s+1)%segs;
+      idx.push(a0+s, b0+s, b0+s2, a0+s, b0+s2, a0+s2);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(v,3));
+  g.setIndex(idx);
+  return g;
+}
+const ocean = new THREE.Mesh(buildDisc(SEA_R, 155, 190), oceanMat);
 scene.add(ocean);
+
+// ---------- encircling mountains ----------
+function buildMountains(){
+  const g = new THREE.Group();
+  const rockA = M(0x5d6f74), rockB = M(0x48585f), snow = M(0xe8f2f6), green = M(0x37613f);
+  for(let i=0;i<64;i++){
+    const a  = (i/64)*Math.PI*2 + (Math.random()-0.5)*0.05;
+    const rr = RING_R + (Math.random()-0.5)*16;
+    const h  = 22 + Math.random()*30;
+    const w  = 13 + Math.random()*15;
+    const peak = new THREE.Mesh(new THREE.ConeGeometry(w, h, 5 + (i%3)), Math.random()<0.5?rockA:rockB);
+    peak.position.set(Math.cos(a)*rr, h*0.5 - 2, Math.sin(a)*rr);
+    peak.rotation.y = Math.random()*3;
+    g.add(peak);
+    if(h > 40){
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(w*0.34, h*0.26, 5), snow);
+      cap.position.set(peak.position.x, h - h*0.13 - 2, peak.position.z);
+      g.add(cap);
+    }
+    // jungle skirt at the waterline
+    const skirt = new THREE.Mesh(new THREE.ConeGeometry(w*1.15, 9, 6), green);
+    skirt.position.set(Math.cos(a)*(rr-5), 2.5, Math.sin(a)*(rr-5));
+    g.add(skirt);
+  }
+  scene.add(g);
+}
 
 // ---------- helpers ----------
 const M = (c, rough) => new THREE.MeshLambertMaterial({color:c});
+const at = (mesh, x, y, z) => { mesh.position.set(x, y, z); return mesh; };
 function tone(hex, amt){ // lighten / darken
   const c = new THREE.Color(hex);
   c.offsetHSL(0, 0, amt);
@@ -272,20 +364,66 @@ function buildIslands(){
     const g = new THREE.Group();
     const sand = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad*1.25, 1.3, 9), M(0xd9c48c));
     sand.position.y = 0.1;
-    const rock = new THREE.Mesh(new THREE.ConeGeometry(rad*0.62, 3.2+Math.random()*3, 7), M(0x6f7a5c));
-    rock.position.y = 2.1;
-    rock.rotation.y = Math.random()*3;
-    g.add(sand, rock);
+    const hill = new THREE.Mesh(new THREE.ConeGeometry(rad*0.78, 2.6+Math.random()*2.4, 8), M(0x3c7a45));
+    hill.position.y = 1.7;
+    hill.rotation.y = Math.random()*3;
+    const outcrop = new THREE.Mesh(new THREE.ConeGeometry(rad*0.26, 2.8+Math.random()*2.2, 5), M(0x6b7570));
+    outcrop.position.set((Math.random()-0.5)*rad*0.5, 2.4, (Math.random()-0.5)*rad*0.5);
+    outcrop.rotation.y = Math.random()*3;
+    g.add(sand, hill, outcrop);
 
-    // palms
-    for(let p=0;p<2+Math.random()*2;p++){
-      const pa = Math.random()*Math.PI*2, pr = rad*0.55;
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.2,2.6,5), M(0x8a6b45));
-      trunk.position.set(Math.cos(pa)*pr, 1.9, Math.sin(pa)*pr);
-      trunk.rotation.z = (Math.random()-0.5)*0.35;
-      const top = new THREE.Mesh(new THREE.ConeGeometry(1.15, 0.85, 6), M(0x3d7a45));
-      top.position.set(trunk.position.x, 3.25, trunk.position.z);
-      g.add(trunk, top);
+    // palms — trunk with a crown of drooping fronds
+    for(let p=0;p<3+Math.random()*3;p++){
+      const pa = Math.random()*Math.PI*2, pr = rad*(0.45+Math.random()*0.35);
+      const th = 2.4+Math.random()*1.8;
+      const lean = (Math.random()-0.5)*0.42;
+      const px = Math.cos(pa)*pr, pz = Math.sin(pa)*pr;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.22,th,5), M(0x8a6b45));
+      trunk.position.set(px, 0.7+th/2, pz);
+      trunk.rotation.z = lean;
+      g.add(trunk);
+      const crownY = 0.7 + th + 0.05;
+      const crown = new THREE.Group();
+      crown.position.set(px - Math.sin(lean)*th*0.5, crownY, pz);
+      for(let f=0;f<6;f++){
+        const arm = new THREE.Group();
+        const frond = new THREE.Mesh(new THREE.ConeGeometry(0.30, 1.95, 4), M(f%2?0x3f8a4a:0x347a41));
+        frond.rotation.z = Math.PI/2;     // lay the cone along +X, tip outward
+        frond.position.x = 0.98;
+        arm.add(frond);
+        arm.rotation.z = -0.50 - Math.random()*0.22;   // droop
+        arm.rotation.y = (f/6)*Math.PI*2 + Math.random()*0.3;
+        crown.add(arm);
+      }
+      const nuts = new THREE.Mesh(new THREE.SphereGeometry(0.17, 5, 4), M(0x6d4f2c));
+      nuts.position.y = -0.16;
+      crown.add(nuts);
+      g.add(crown);
+    }
+
+    // broadleaf canopy trees — stacked cones, the jungle mass
+    for(let p=0;p<2+Math.random()*3;p++){
+      const pa = Math.random()*Math.PI*2, pr = rad*Math.random()*0.5;
+      const px = Math.cos(pa)*pr, pz = Math.sin(pa)*pr;
+      const th = 1.5+Math.random()*1.2;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.26,th,5), M(0x715232));
+      trunk.position.set(px, 1.4+th/2, pz);
+      g.add(trunk);
+      for(let l=0;l<3;l++){
+        const leaf = new THREE.Mesh(new THREE.ConeGeometry(1.5-l*0.36, 1.3, 6), M([0x2f6b3a,0x3a7d44,0x46914e][l]));
+        leaf.position.set(px, 1.4+th+l*0.62, pz);
+        leaf.rotation.y = Math.random()*3;
+        g.add(leaf);
+      }
+    }
+
+    // undergrowth
+    for(let p=0;p<4+Math.random()*4;p++){
+      const pa = Math.random()*Math.PI*2, pr = rad*(0.2+Math.random()*0.7);
+      const bush = new THREE.Mesh(new THREE.SphereGeometry(0.42+Math.random()*0.4, 6, 4), M(0x2c6437));
+      bush.position.set(Math.cos(pa)*pr, 0.95, Math.sin(pa)*pr);
+      bush.scale.y = 0.62;
+      g.add(bush);
     }
     g.position.set(x, 0, z);
     scene.add(g);
@@ -293,27 +431,211 @@ function buildIslands(){
   }
 }
 
+// ---------- birds ----------
+const birds = [];
+function buildBirds(){
+  const wingGeo = new THREE.ConeGeometry(0.34, 1.5, 3);
+  const bodyGeo = new THREE.SphereGeometry(0.20, 5, 4);
+  const mat = M(0x2a3038), matL = M(0xe4ecf2);
+  for(let i=0;i<22;i++){
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(bodyGeo, Math.random()<0.4?matL:mat);
+    body.scale.set(1, 0.8, 2.1);
+    g.add(body);
+    const wl = new THREE.Group(), wr = new THREE.Group();
+    const lw = new THREE.Mesh(wingGeo, Math.random()<0.4?matL:mat);
+    lw.rotation.z = Math.PI/2; lw.position.x = 0.75; lw.scale.set(1,1,0.28);
+    wl.add(lw);
+    const rw = lw.clone(); rw.position.x = -0.75; rw.rotation.z = -Math.PI/2;
+    wr.add(rw);
+    g.add(wl, wr);
+    scene.add(g);
+    birds.push({
+      g, wl, wr,
+      r: 26 + Math.random()*96,
+      a: Math.random()*Math.PI*2,
+      spd: (0.10 + Math.random()*0.16) * (Math.random()<0.25?-1:1),
+      y: 15 + Math.random()*28,
+      flap: Math.random()*7,
+      rate: 5.5 + Math.random()*4
+    });
+  }
+}
+function stepBirds(dt, t){
+  for(const b of birds){
+    b.a += b.spd*dt;
+    const x = Math.cos(b.a)*b.r, z = Math.sin(b.a)*b.r;
+    b.g.position.set(x, b.y + Math.sin(t*0.5 + b.flap)*1.8, z);
+    b.g.rotation.y = -b.a + (b.spd>0 ? Math.PI/2 : -Math.PI/2);
+    b.g.rotation.z = b.spd > 0 ? -0.28 : 0.28;
+    const f = Math.sin(t*b.rate + b.flap)*0.62;
+    b.wl.rotation.z = f;
+    b.wr.rotation.z = -f;
+  }
+}
+
 // ---------- bases ----------
 const bases = [];
+// Each stronghold is built to advertise its crew's temperament from a distance.
+const BASE_BUILDERS = [
+
+  // ---- 0 · IRONHOLD — the forge. Black iron, spikes, trophies, furnace glow.
+  function(g, f){
+    const iron = M(0x2b2c30), dark = M(0x1d1e22), ember = M(0xff7a2a);
+    g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(8.4, 9.6, 1.8, 6), M(0x3b3226)), 0, 0.2, 0));
+    const keep = new THREE.Mesh(new THREE.BoxGeometry(6.4, 7.6, 6.4), iron);
+    keep.position.y = 4.6; keep.rotation.y = 0.4;
+    g.add(keep);
+    // chimney stacks belching heat
+    for(const [cx,cz] of [[-2.2,-2.2],[2.2,2.2]]){
+      const st = new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.95,4.4,6), dark);
+      st.position.set(cx, 10.2, cz);
+      const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,0.5,6), ember);
+      glow.position.set(cx, 12.5, cz);
+      g.add(st, glow);
+    }
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, 0.4), ember);
+    mouth.position.set(0, 3.0, 3.3); mouth.rotation.y = 0.4;
+    g.add(mouth);
+    // spiked palisade
+    for(let i=0;i<14;i++){
+      const a = (i/14)*Math.PI*2;
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.34, 3.0, 4), dark);
+      sp.position.set(Math.cos(a)*7.6, 2.4, Math.sin(a)*7.6);
+      sp.rotation.z = Math.cos(a)*0.22; sp.rotation.x = -Math.sin(a)*0.22;
+      g.add(sp);
+    }
+    // taken masts, mounted as trophies
+    for(let i=0;i<3;i++){
+      const a = -0.9 + i*0.9;
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.13,5.2,4), M(0x4f3a26));
+      m.position.set(Math.cos(a)*5.6, 3.6, Math.sin(a)*5.6);
+      m.rotation.z = 0.36;
+      const rag = new THREE.Mesh(new THREE.PlaneGeometry(1.5,0.9), new THREE.MeshLambertMaterial({color:[0xe6a428,0x3b8fd4,0x3fa87a][i], side:THREE.DoubleSide}));
+      rag.position.set(Math.cos(a)*5.6+0.8, 5.6, Math.sin(a)*5.6);
+      g.add(m, rag);
+    }
+    return {poleY: 12.0, poleAt:[0,0]};
+  },
+
+  // ---- 1 · GOLDHAVEN — the vault. Gilded domes, walls, visible bullion.
+  function(g, f){
+    const stone = M(0xd8c79a), gold = M(0xf0bf3c), gold2 = M(0xd8a422);
+    g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(8.6, 9.6, 1.8, 12), stone), 0, 0.2, 0));
+    const vault = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 4.2, 5.0, 12), stone);
+    vault.position.y = 3.4;
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(3.7, 14, 8, 0, Math.PI*2, 0, Math.PI/2), gold);
+    dome.position.y = 5.8;
+    g.add(vault, dome);
+    // ring of lesser domes
+    for(let i=0;i<4;i++){
+      const a = i*Math.PI/2 + 0.78;
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.3,3.4,8), stone);
+      t.position.set(Math.cos(a)*5.6, 2.6, Math.sin(a)*5.6);
+      const d2 = new THREE.Mesh(new THREE.SphereGeometry(1.22, 10, 6, 0, Math.PI*2, 0, Math.PI/2), gold2);
+      d2.position.set(Math.cos(a)*5.6, 4.3, Math.sin(a)*5.6);
+      g.add(t, d2);
+    }
+    // low gilded wall
+    for(let i=0;i<20;i++){
+      const a = (i/20)*Math.PI*2;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(1.3,1.5,0.6), stone);
+      b.position.set(Math.cos(a)*7.8, 1.6, Math.sin(a)*7.8);
+      b.rotation.y = -a;
+      g.add(b);
+    }
+    // the hoard, stacked on the quay
+    for(let i=0;i<9;i++){
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.85,0.34,0.5), gold);
+      bar.position.set(-5.4 + (i%3)*0.95, 1.3 + Math.floor(i/3)*0.36, 4.6 + (i%2)*0.3);
+      bar.rotation.y = 0.2;
+      g.add(bar);
+    }
+    return {poleY: 9.6, poleAt:[0,0]};
+  },
+
+  // ---- 2 · TEMPEST — the beacon. Lighthouse on wave-battered rock.
+  function(g, f){
+    const rock = M(0x54606b), pale = M(0xe2e8ec), band = M(0x2f6f9e), lamp = M(0xffe9a8);
+    for(let i=0;i<5;i++){
+      const a = (i/5)*Math.PI*2;
+      const r = new THREE.Mesh(new THREE.ConeGeometry(2.6+Math.random(), 3.4+Math.random()*2, 5), rock);
+      r.position.set(Math.cos(a)*6.2, 1.0, Math.sin(a)*6.2);
+      r.rotation.y = Math.random()*3;
+      g.add(r);
+    }
+    g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(7.4, 9.0, 2.0, 9), rock), 0, 0.3, 0));
+    // banded tower
+    for(let i=0;i<5;i++){
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(1.5-i*0.14, 1.72-i*0.14, 2.4, 10), i%2?band:pale);
+      seg.position.y = 2.4 + i*2.35;
+      g.add(seg);
+    }
+    const gallery = new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,0.3,10), rock);
+    gallery.position.y = 14.2;
+    const light = new THREE.Mesh(new THREE.CylinderGeometry(0.95,0.95,1.5,8), lamp);
+    light.position.y = 15.1;
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(1.25, 1.4, 8), band);
+    cap.position.y = 16.5;
+    g.add(gallery, light, cap);
+    return {poleY: 18.6, poleAt:[0,0]};
+  },
+
+  // ---- 3 · STONEWATCH — the bastion. Squat, mossy, shut tight.
+  function(g, f){
+    const stone = M(0x7d8378), moss = M(0x4a6b47), dark = M(0x5c6157);
+    g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(8.8, 9.8, 1.6, 8), M(0x6f7368)), 0, 0.2, 0));
+    const keep = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.9, 3.6, 8), stone);
+    keep.position.y = 2.6;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(4.7, 4.7, 0.5, 8), dark);
+    cap.position.y = 4.6;
+    g.add(keep, cap);
+    // crenellations
+    for(let i=0;i<16;i++){
+      const a = (i/16)*Math.PI*2;
+      const c = new THREE.Mesh(new THREE.BoxGeometry(1.1,1.0,0.7), stone);
+      c.position.set(Math.cos(a)*4.5, 5.3, Math.sin(a)*4.5);
+      c.rotation.y = -a;
+      g.add(c);
+    }
+    // corner watchtowers
+    for(let i=0;i<4;i++){
+      const a = i*Math.PI/2 + 0.78;
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(1.0,1.25,5.2,7), stone);
+      t.position.set(Math.cos(a)*6.4, 3.2, Math.sin(a)*6.4);
+      const rf = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1.7, 7), moss);
+      rf.position.set(Math.cos(a)*6.4, 6.6, Math.sin(a)*6.4);
+      g.add(t, rf);
+    }
+    // moss creeping over everything
+    for(let i=0;i<10;i++){
+      const a = Math.random()*Math.PI*2, r = 3.0+Math.random()*4.4;
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.5+Math.random()*0.5, 6, 4), moss);
+      m.position.set(Math.cos(a)*r, 1.2+Math.random()*3.6, Math.sin(a)*r);
+      m.scale.y = 0.5;
+      g.add(m);
+    }
+    return {poleY: 8.4, poleAt:[0,0]};
+  }
+];
+
 function buildBases(){
   const d = 60;
   const spots = [[-d,-d],[d,-d],[d,d],[-d,d]];
   FACTIONS.forEach((f,i)=>{
     const [x,z] = spots[i];
     const g = new THREE.Group();
+    const meta = BASE_BUILDERS[i](g, f);
 
-    const dock = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 9.5, 1.6, 8), M(0xcbb888));
-    dock.position.y = 0.2;
-    const keep = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 3.1, 5.4, 6), M(0x6b6257));
-    keep.position.y = 3.4;
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(3.4, 2.2, 6), M(tone(f.color,-0.14)));
-    roof.position.y = 7.1;
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,4,4), M(0x4a4034));
-    pole.position.y = 9.6;
-    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.4), new THREE.MeshLambertMaterial({color:f.color, side:THREE.DoubleSide}));
-    flag.position.set(1.25, 10.6, 0);
-    g.add(dock, keep, roof, pole, flag);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,4.6,4), M(0x4a4034));
+    pole.position.set(meta.poleAt[0], meta.poleY, meta.poleAt[1]);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.6,1.5),
+      new THREE.MeshLambertMaterial({color:f.color, side:THREE.DoubleSide}));
+    flag.position.set(meta.poleAt[0]+1.35, meta.poleY+1.6, meta.poleAt[1]);
+    g.add(pole, flag);
+
     g.position.set(x, 0, z);
+    g.rotation.y = Math.atan2(-x, -z);   // face the open sea
     scene.add(g);
 
     bases.push({x, z, faction:i, score:0, flag, mesh:g});
@@ -333,13 +655,26 @@ function makeCrewman(color, isCaptain){
   g.add(body, head);
 
   if(isCaptain){
-    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.24, 4), M(0x1b1c22));
-    hat.position.y = 0.68; hat.rotation.y = Math.PI/4;
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.04, 8), M(0x1b1c22));
-    brim.position.y = 0.60;
+    // tricorne
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.185, 0.20, 7), M(0x15161b));
+    crown.position.y = 0.68;
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.045, 3), M(0x15161b));
+    brim.position.y = 0.60; brim.rotation.y = Math.PI/6;
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.052, 6, 5), M(0xf0ece2));
+    skull.position.set(0, 0.685, 0.16);
+    // eye patch — disc over one eye plus the strap around the head
+    const patch = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.02, 7), M(0x121317));
+    patch.position.set(0.055, 0.555, 0.113); patch.rotation.x = Math.PI/2;
+    const strap = new THREE.Mesh(new THREE.TorusGeometry(0.132, 0.011, 4, 12), M(0x121317));
+    strap.position.y = 0.545; strap.rotation.y = Math.PI/2; strap.rotation.x = 0.26;
+    // coat, sash and cutlass
+    const coat = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.20, 0.30, 6), M(0x6d2028));
+    coat.position.y = 0.13;
+    const sash = new THREE.Mesh(new THREE.CylinderGeometry(0.172, 0.172, 0.06, 7), M(0xc8a33a));
+    sash.position.y = 0.255;
     const sword = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.52, 0.035), M(0xd8dde2));
     sword.position.set(0.19, 0.3, 0.02); sword.rotation.z = -0.45;
-    g.add(hat, brim, sword);
+    g.add(crown, brim, skull, patch, strap, coat, sash, sword);
   }else{
     const bandana = new THREE.Mesh(new THREE.CylinderGeometry(0.135,0.135,0.1,7), M(color));
     bandana.position.y = 0.60;
@@ -348,33 +683,95 @@ function makeCrewman(color, isCaptain){
   return g;
 }
 
+// Hull proportions, timber and canvas per faction. Overall length is held
+// roughly constant so combat and pickup ranges stay meaningful.
+const SHIP_STYLE = [
+  { beam:2.15, wood:0x2f3034, trim:0x8e2b25, canvas:0x7d2b28, deck:0x6d5a44, mastH:4.3, sailW:2.45 }, // Ironhold
+  { beam:2.45, wood:0x7a5a2e, trim:0xe0b23a, canvas:0xf0e2b4, deck:0xc3a267, mastH:4.0, sailW:2.60 }, // Goldhaven
+  { beam:1.75, wood:0x4a5c68, trim:0x9fd0ee, canvas:0xd8e8f4, deck:0x8f9aa2, mastH:5.2, sailW:2.35 }, // Tempest
+  { beam:2.30, wood:0x5d5a4a, trim:0x3fa87a, canvas:0xcfd8c4, deck:0x8d8a76, mastH:3.7, sailW:2.30 }, // Stonewatch
+];
+
 function makeShip(fi){
-  const f = FACTIONS[fi];
+  const f = FACTIONS[fi], st = SHIP_STYLE[fi];
   const outer = new THREE.Group();   // heading
   const tilt  = new THREE.Group();   // wave pitch/roll
   outer.add(tilt);
 
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.85, 4.2), M(0x6b4a2f));
+  const woodM = M(st.wood), trimM = M(st.trim), deckM = M(st.deck);
+
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(st.beam, 0.85, 4.2), woodM);
   hull.position.y = 0.42;
-  const bow = new THREE.Mesh(new THREE.ConeGeometry(1.0, 1.9, 4), M(0x6b4a2f));
+  const bow = new THREE.Mesh(new THREE.ConeGeometry(st.beam*0.5, 1.9, 4), woodM);
   bow.position.set(0, 0.42, 2.9);
   bow.rotation.set(Math.PI/2, 0, Math.PI/4);
   bow.scale.set(1, 1, 0.85);
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.12, 3.9), M(0xa8865c));
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(st.beam*0.88, 0.12, 3.9), deckM);
   deck.position.y = 0.86;
-  const stern = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.9, 0.9), M(0x5c3f28));
+  const stern = new THREE.Mesh(new THREE.BoxGeometry(st.beam*0.9, 0.9, 0.9), M(tone(st.wood,-0.06)));
   stern.position.set(0, 1.2, -1.7);
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(st.beam*0.94, 0.14, 4.0), trimM);
+  rail.position.y = 0.93;
 
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 4.4, 6), M(0x4f3a26));
-  mast.position.y = 3.0;
-  const sail = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2.6),
-    new THREE.MeshLambertMaterial({color:0xeae2cf, side:THREE.DoubleSide}));
-  sail.position.set(0, 3.4, -0.12);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, st.mastH, 6), M(0x4f3a26));
+  mast.position.y = 0.9 + st.mastH/2;
+  const sail = new THREE.Mesh(new THREE.PlaneGeometry(st.sailW, st.mastH*0.60),
+    new THREE.MeshLambertMaterial({color:st.canvas, side:THREE.DoubleSide}));
+  sail.position.set(0, 0.9 + st.mastH*0.60, -0.12);
   const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.62),
     new THREE.MeshLambertMaterial({color:f.color, side:THREE.DoubleSide}));
-  flag.position.set(0.58, 5.05, 0);
+  flag.position.set(0.58, 0.9 + st.mastH + 0.35, 0);
 
-  tilt.add(hull, bow, deck, stern, mast, sail, flag);
+  tilt.add(hull, bow, deck, stern, rail, mast, sail, flag);
+
+  // ---- faction character pieces ----
+  if(fi === 0){                       // Ironhold: iron ram, spiked rail, black sails
+    const ram = new THREE.Mesh(new THREE.ConeGeometry(0.30, 1.5, 4), M(0x26272b));
+    ram.position.set(0, 0.42, 4.1); ram.rotation.x = Math.PI/2;
+    tilt.add(ram);
+    for(let i=0;i<6;i++){
+      const side = i<3 ? 1 : -1;
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 4), M(0x1c1d21));
+      sp.position.set(side*st.beam*0.47, 1.16, -1.3 + (i%3)*1.3);
+      sp.rotation.z = -side*0.5;
+      tilt.add(sp);
+    }
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.19, 6, 5), M(0xeee8dc));
+    skull.position.set(0, 1.62, -2.05);
+    tilt.add(skull);
+  } else if(fi === 1){                // Goldhaven: gilded stern lanterns, fat merchant hull
+    for(const sx of [-0.55, 0.55]){
+      const lant = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.16,0.34,6), M(0xf3c94a));
+      lant.position.set(sx, 1.82, -2.05);
+      tilt.add(lant);
+    }
+    const trimBand = new THREE.Mesh(new THREE.BoxGeometry(st.beam*1.01, 0.13, 4.05), M(0xe0b23a));
+    trimBand.position.y = 0.66;
+    const figurehead = new THREE.Mesh(new THREE.SphereGeometry(0.22, 7, 6), M(0xf0c74e));
+    figurehead.position.set(0, 0.78, 3.75);
+    tilt.add(trimBand, figurehead);
+  } else if(fi === 2){                // Tempest: topsail, long bowsprit, sleek and overcanvased
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(st.sailW*0.72, 1.35),
+      new THREE.MeshLambertMaterial({color:st.canvas, side:THREE.DoubleSide}));
+    top.position.set(0, 0.9 + st.mastH*0.92, -0.12);
+    const sprit = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,2.4,5), M(0x4f3a26));
+    sprit.position.set(0, 1.05, 4.2); sprit.rotation.x = Math.PI/2 - 0.22;
+    const jib = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.6),
+      new THREE.MeshLambertMaterial({color:st.canvas, side:THREE.DoubleSide}));
+    jib.position.set(0, 1.95, 3.35); jib.rotation.y = Math.PI/2;
+    tilt.add(top, sprit, jib);
+  } else {                            // Stonewatch: shield wall, reinforced stubby hull
+    for(let i=0;i<8;i++){
+      const side = i<4 ? 1 : -1;
+      const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.26,0.08,7), M(i%2?0x3fa87a:0x6f7a68));
+      sh.position.set(side*st.beam*0.5, 1.10, -1.5 + (i%4)*1.0);
+      sh.rotation.z = Math.PI/2;
+      tilt.add(sh);
+    }
+    const ribs = new THREE.Mesh(new THREE.BoxGeometry(st.beam*1.02, 0.55, 1.0), M(0x4b4a3e));
+    ribs.position.set(0, 0.55, 0.4);
+    tilt.add(ribs);
+  }
 
   // crew — captain at the wheel, hands forward
   const crewGroup = new THREE.Group();
@@ -383,8 +780,10 @@ function makeShip(fi){
   // cargo crates, revealed as the hold fills
   const crates = [];
   for(let i=0;i<CAPACITY;i++){
-    const c = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.5,0.55), M(0xb8912f));
-    c.position.set(-0.4 + (i%2)*0.8, 1.18, -0.4 + Math.floor(i/2)*0.7);
+    const c = makeChest();
+    c.scale.setScalar(0.62);
+    c.position.set(-0.38 + (i%2)*0.76, 0.94, -0.45 + Math.floor(i/2)*0.68);
+    c.rotation.y = Math.PI/2 + (Math.random()-0.5)*0.3;
     c.visible = false;
     tilt.add(c); crates.push(c);
   }
@@ -432,8 +831,28 @@ function setCrew(s){
 
 // ---------- treasure ----------
 let treasure = [];
-const treasureGeo = new THREE.BoxGeometry(0.85, 0.7, 0.85);
-const treasureMat = M(0xe0b83c);
+
+// Shared chest parts — geometry and materials are reused across every instance.
+const CHEST = {
+  body : new THREE.BoxGeometry(1.05, 0.52, 0.72),
+  lid  : new THREE.CylinderGeometry(0.36, 0.36, 1.05, 10, 1, false, 0, Math.PI),
+  strap: new THREE.BoxGeometry(0.09, 0.60, 0.76),
+  lock : new THREE.BoxGeometry(0.16, 0.22, 0.10),
+  wood : M(0x8a5a30), woodDark: M(0x6b431f), iron: M(0x4a4a52), brass: M(0xe8b73a)
+};
+function makeChest(){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(CHEST.body, CHEST.wood);
+  body.position.y = 0.26;
+  const lid = new THREE.Mesh(CHEST.lid, CHEST.woodDark);
+  lid.rotation.z = Math.PI/2;          // barrel lid lying across the chest
+  lid.position.y = 0.52;
+  const s1 = new THREE.Mesh(CHEST.strap, CHEST.iron); s1.position.set(-0.34, 0.30, 0);
+  const s2 = new THREE.Mesh(CHEST.strap, CHEST.iron); s2.position.set( 0.34, 0.30, 0);
+  const lock = new THREE.Mesh(CHEST.lock, CHEST.brass); lock.position.set(0, 0.42, 0.37);
+  g.add(body, lid, s1, s2, lock);
+  return g;
+}
 
 function spawnTreasure(){
   let x, z;
@@ -446,9 +865,9 @@ function spawnTreasure(){
     const a = Math.random()*Math.PI*2, r = Math.random()*BOUND*0.92;
     x = Math.cos(a)*r; z = Math.sin(a)*r;
   }
-  const m = new THREE.Mesh(treasureGeo, treasureMat);
+  const m = makeChest();
   m.position.set(x, 0, z);
-  m.rotation.y = Math.random()*3;
+  m.rotation.y = Math.random()*Math.PI*2;
   scene.add(m);
   treasure.push({x, z, mesh:m, taken:false});
 }
@@ -555,6 +974,17 @@ function step(dt, t){
     if(s.state==='HUNT' && s.target && s.target.alive===false) think(s);
     if(s.target){ tx = s.target.x; tz = s.target.z; } else { tx=s.x; tz=s.z; }
 
+    // sheer away from land — bend the target rather than the decision
+    for(const isl of islands){
+      const d = dist(s.x, s.z, isl.x, isl.z);
+      const clear = isl.r + 4.2;
+      if(d < clear + 11 && d > 0.01){
+        const push = (clear + 11 - d) * 1.7;
+        tx += ((s.x - isl.x)/d) * push;
+        tz += ((s.z - isl.z)/d) * push;
+      }
+    }
+
     // steer
     const want = Math.atan2(tx-s.x, tz-s.z);
     let da = want - s.heading;
@@ -570,6 +1000,15 @@ function step(dt, t){
     // keep inside the sea
     const r = Math.hypot(s.x, s.z);
     if(r > BOUND){ s.x *= BOUND/r; s.z *= BOUND/r; s.target=null; }
+
+    // and never inside an island
+    for(const isl of islands){
+      const d = dist(s.x, s.z, isl.x, isl.z), clear = isl.r + 2.4;
+      if(d < clear && d > 0.01){
+        s.x = isl.x + ((s.x-isl.x)/d)*clear;
+        s.z = isl.z + ((s.z-isl.z)/d)*clear;
+      }
+    }
 
     // pick up treasure
     for(const tr of treasure){
@@ -750,6 +1189,8 @@ function reset(){
 }
 
 buildIslands();
+buildMountains();
+buildBirds();
 buildBases();
 buildLedger();
 reset();
@@ -764,6 +1205,7 @@ function frame(now){
     dt *= rate;
     simT += dt;
     step(dt, simT);
+    stepBirds(dt, simT);
   }
   oceanMat.uniforms.uTime.value = simT;
 
