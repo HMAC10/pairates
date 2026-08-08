@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>p.ai.rates</title>
+<title>PAIRATES</title>
 <style>
   :root{
     --ink:#07131c;
@@ -22,7 +22,10 @@
     font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
     color:var(--text);
   }
-  canvas{display:block;position:fixed;inset:0}
+  canvas{display:block}
+  /* Only the scene canvas is full-bleed. This used to be a bare `canvas` rule,
+     which also pinned every chart canvas in the lab to the viewport corner. */
+  #c{position:fixed;inset:0}
 
   .panel{
     position:fixed;
@@ -61,7 +64,7 @@
   .bar i{display:block;height:100%;width:0;transition:width .45s ease}
 
   /* ---- inspector ---- */
-  #inspect{top:16px;right:16px;width:214px;padding:13px 14px;display:none}
+  #inspect{bottom:72px;right:16px;width:214px;padding:13px 14px;display:none}
   #inspect .who{font-size:15px;font-weight:600;margin:6px 0 9px}
   .row{
     display:flex;justify-content:space-between;gap:10px;
@@ -94,15 +97,55 @@
   }
   input[type=range]{width:88px;accent-color:var(--f1);cursor:pointer}
 
-  #keys{
-    position:fixed;bottom:18px;left:16px;
-    font:400 10px/1.7 ui-monospace,monospace;color:var(--dim);
-    letter-spacing:.05em;
-  }
+  #tags{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:5}
+.tag{position:absolute;transform:translate(-50%,-100%);font:11px/1.25 ui-monospace,monospace;
+  color:#e8f1f6;text-shadow:0 1px 3px #000;white-space:nowrap;text-align:center}
+.tag .bar{width:56px;height:5px;margin:2px auto 0;border:1px solid rgba(0,0,0,.55);
+  background:rgba(0,0,0,.45)}
+.tag .bar i{display:block;height:100%}
+.tag .act{opacity:.85;font-size:10px}
+#lab{position:fixed;top:16px;right:16px;width:280px;max-height:calc(100vh - 32px);
+  overflow-y:auto;overflow-x:hidden;padding:13px 14px;z-index:6}
+#lab .labhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#lab button{font:600 10px/1 ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;
+  background:rgba(255,255,255,.07);color:var(--dim);border:1px solid rgba(255,255,255,.14);
+  border-radius:5px;padding:5px 8px;cursor:pointer}
+#lab button:hover{color:#fff}
+#labsum{font:400 11px/1.6 ui-monospace,monospace;color:var(--dim);margin-top:6px}
+#labsum b{color:#eef6fa}
+#labbody{display:none;margin-top:10px}
+#labbody.open{display:block}   /* ID + class, so this outranks the rule above */
+.labsec{font:600 9px/1 ui-monospace,monospace;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--dim);margin:12px 0 6px;opacity:.75}
+#lab canvas{position:static;display:block;width:252px;max-width:100%;
+  border-radius:6px;background:rgba(0,0,0,.24)}
+#c-radar{height:196px}
+#c-drift{height:184px}
+#c-wins{height:76px}
+.lrow{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font:400 11px/1.9 ui-monospace,monospace;color:var(--dim)}
+.lrow i{font-style:normal;color:#eef6fa}
+.lrow input[type=range]{width:104px}
+.lrow input[type=number]{width:64px;background:rgba(255,255,255,.07);color:#eef6fa;
+  border:1px solid rgba(255,255,255,.14);border-radius:4px;padding:2px 5px;font:inherit}
+.fslid{margin:8px 0 2px}
+.fslid .fname{font:600 10px/1.6 ui-monospace,monospace;letter-spacing:.06em}
+.fslid .trow{display:flex;align-items:center;gap:6px;font:400 10px/1.6 ui-monospace,monospace;color:var(--dim)}
+.fslid .trow span{width:34px}
+.fslid .trow input{flex:1}
+.fslid .trow b{width:30px;text-align:right;color:#eef6fa;font-weight:400}
+.labbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.build{font:400 9px/1.6 ui-monospace,monospace;color:var(--dim);opacity:.55;letter-spacing:.08em}
+  #help{bottom:72px;left:16px;width:210px;padding:12px 13px;display:none;z-index:7}
+  #help.on{display:block}
+  .hrow{display:flex;gap:9px;font:400 10px/1.85 ui-monospace,monospace;color:var(--dim)}
+  .hrow b{color:#eef6fa;font-weight:600;min-width:74px}
+  .hsec{font:600 9px/1 ui-monospace,monospace;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--dim);opacity:.7;margin:9px 0 5px}
   @media (max-width:760px){
     #ledger{width:206px;padding:11px}
     #inspect{display:none!important}
-    #keys{display:none}
+    #help{display:none!important}
   }
 </style>
 </head>
@@ -112,8 +155,9 @@
 
 <div id="ledger" class="panel">
   <div class="eyebrow">Treasure delivered</div>
-  <h1>p.ai.rates</h1>
+  <h1>PAIRATES</h1>
   <div class="sub">Four crews. One sea. No rules.</div>
+  <div class="build">build 8 — berths, gates, rigging</div>
   <div id="facs"></div>
 </div>
 
@@ -131,17 +175,77 @@
 <div id="dock" class="panel">
   <button id="b-top">Top down</button>
   <button id="b-follow">Follow leader</button>
+  <button id="b-free">Free cam</button>
+  <button id="b-stats">Stats</button>
   <div class="div"></div>
   <button id="b-pause">Pause</button>
-  <label for="spd">Speed</label>
-  <input id="spd" type="range" min="0.25" max="4" step="0.25" value="1">
+  <label for="spd">Speed <b id="v-spd">1.0x</b></label>
+  <input id="spd" type="range" min="0" max="100" step="1" value="34">
   <div class="div"></div>
   <button id="b-reset">New sea</button>
+  <button id="b-help">?</button>
 </div>
 
-<div id="keys">
-  drag orbit · scroll zoom · right-drag pan · click a ship
+
+
+<div id="lab" class="panel">
+  <div class="labhead">
+    <span class="eyebrow">Evolution lab</span>
+    <button id="b-lab">expand</button>
+  </div>
+  <div id="labsum">Gen <b id="l-gen">1</b> · leader <b id="l-lead">—</b> · target <b id="l-tgt">100</b></div>
+  <div id="labbody">
+    <div class="labsec">Personality space</div>
+    <canvas id="c-radar" width="252" height="200"></canvas>
+    <div class="labsec">Trait drift by generation</div>
+    <canvas id="c-drift" width="252" height="188"></canvas>
+    <div class="labsec">Rounds won</div>
+    <canvas id="c-wins" width="252" height="76"></canvas>
+
+    <div class="labsec">World</div>
+    <label class="lrow"><span>Treasure rate <i id="v-spawn">1.00</i></span>
+      <input id="s-spawn" type="range" min="0.1" max="3" step="0.05" value="1"></label>
+    <label class="lrow"><span>Chests at sea <i id="v-cap">14</i></span>
+      <input id="s-cap" type="range" min="4" max="40" step="1" value="14"></label>
+
+    <div class="labsec">Reward &amp; selection</div>
+    <label class="lrow"><span>Win at</span>
+      <input id="s-target" type="number" min="10" max="2000" step="10" value="100"></label>
+    <label class="lrow"><span>Evolution</span>
+      <input id="s-evo" type="checkbox" checked></label>
+    <label class="lrow"><span>Mutation <i id="v-mut">0.09</i></span>
+      <input id="s-mut" type="range" min="0" max="0.30" step="0.01" value="0.09"></label>
+    <label class="lrow"><span>Imitate winner <i id="v-pull">0.35</i></span>
+      <input id="s-pull" type="range" min="0" max="1" step="0.05" value="0.35"></label>
+    <label class="lrow"><span>Shuffle corners</span>
+      <input id="s-shuf" type="checkbox" checked></label>
+
+    <div class="labsec">Manual override</div>
+    <div id="sliders"></div>
+    <div class="labbtns">
+      <button id="b-defaults">Reset to defaults</button>
+      <button id="b-endgen">End round now</button>
+      <button id="b-clearhist">Clear history</button>
+    </div>
+  </div>
 </div>
+
+<div id="help" class="panel">
+  <div class="eyebrow">Controls</div>
+  <div class="hrow"><b>drag</b><span>orbit the sea</span></div>
+  <div class="hrow"><b>scroll</b><span>zoom</span></div>
+  <div class="hrow"><b>right-drag</b><span>pan</span></div>
+  <div class="hrow"><b>click a ship</b><span>inspect her</span></div>
+  <div class="hrow"><b>F</b><span>free cam on / off</span></div>
+  <div class="hsec">In free cam</div>
+  <div class="hrow"><b>W A S D</b><span>fly</span></div>
+  <div class="hrow"><b>drag</b><span>look around</span></div>
+  <div class="hrow"><b>Space / Shift</b><span>up / down</span></div>
+  <div class="hrow"><b>Ctrl</b><span>boost</span></div>
+  <div class="hrow"><b>scroll</b><span>fly speed</span></div>
+</div>
+
+<div id="tags"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -157,6 +261,7 @@ const RING_R   = 143;   // mountains encircling the sea
 const BOUND    = 78;    // ships stay inside this radius
 const CAPACITY = 3;     // crates a hold can carry
 const MAX_CREW = 10;
+const MAX_HP   = 100;   // hull integrity, spent by gunfire and by ramming
 const BASE_SPD = 7.2;   // units/sec at 3 crew
 
 // ---------- the four crews ----------
@@ -165,15 +270,34 @@ const BASE_SPD = 7.2;   // units/sec at 3 crew
 // aggression 0..1  preference for robbing ships over gathering
 // reach      0..1  how far from home it will sail
 const FACTIONS = [
-  { name:'Ironhold',   doc:'Takes what others carry', color:0xd4453b,
+  { name:'Ironhold',   idx:0, doc:'Takes what others carry', color:0xd4453b,
     caution:0.12, greed:1.00, aggression:0.88, reach:1.00 },
-  { name:'Goldhaven',  doc:'Hoards early, risks little', color:0xe6a428,
+  { name:'Goldhaven',  idx:1, doc:'Hoards early, risks little', color:0xe6a428,
     caution:0.78, greed:0.34, aggression:0.08, reach:0.58 },
-  { name:'Tempest',    doc:'Sails far, holds out for full', color:0x3b8fd4,
+  { name:'Tempest',    idx:2, doc:'Sails far, holds out for full', color:0x3b8fd4,
     caution:0.34, greed:1.00, aggression:0.42, reach:1.00 },
-  { name:'Stonewatch', doc:'Never strays from home water', color:0x3fa87a,
+  { name:'Stonewatch', idx:3, doc:'Never strays from home water', color:0x3fa87a,
     caution:0.92, greed:0.62, aggression:0.18, reach:0.40 },
 ];
+
+// ---------- evolution state ----------
+const TRAITS = ['caution','greed','aggression','reach'];
+const evo = {
+  gen: 1,
+  target: 100,
+  on: true,
+  mut: 0.09,          // gaussian noise added to every trait each round
+  pull: 0.35,         // how hard losers imitate the winner
+  shuffle: true,
+  roundT: 0,
+  maxRoundT: 1800,    // sim seconds before a stalled round is called on the leader
+  wins: [0,0,0,0],
+  history: []         // one record per finished generation
+};
+const CORNERS = [[-50,-50],[50,-50],[50,50],[-50,50]];
+const world = { spawn: 1.0, cap: 14 };   // treasure abundance levers
+// Captured before anything can mutate them, so "reset to defaults" is exact.
+const DEFAULT_PARAMS = FACTIONS.map(f => TRAITS.reduce((o,t)=>(o[t]=f[t], o), {}));
 
 // ---------- shared wave field ----------
 // Identical maths lives in the vertex shader below. If you change
@@ -351,294 +475,670 @@ function tone(hex, amt){ // lighten / darken
   return c.getHex();
 }
 
+// ---------- spatial helpers ----------
+// Nothing below is eyeballed. Placement is derived from measured axis-aligned
+// bounding boxes, so parts sit flush instead of floating or phasing through.
+//
+// Two conventions used everywhere:
+//   1. Prefabs (palms, crewmen, chests) are authored with their FOOTPRINT AT
+//      LOCAL y = 0, so dropping one on a surface is just position.y = surfaceY.
+//   2. When composing raw meshes, use seat()/stack() instead of constants.
+// Both assume the object is measured while its ancestors are untransformed,
+// which is why every builder assembles at the origin and moves the group last.
+const _bb = new THREE.Box3();
+function bounds(o){
+  o.updateMatrixWorld(true);
+  _bb.setFromObject(o);
+  return {
+    minX:_bb.min.x, maxX:_bb.max.x, minY:_bb.min.y, maxY:_bb.max.y,
+    minZ:_bb.min.z, maxZ:_bb.max.z,
+    w:_bb.max.x-_bb.min.x, h:_bb.max.y-_bb.min.y, d:_bb.max.z-_bb.min.z
+  };
+}
+const topOf = o => bounds(o).maxY;
+
+// Slide o vertically until its underside rests on surfaceY.
+// overlap buries it slightly, which hides seams between faceted solids.
+function seat(o, surfaceY, overlap = 0){
+  o.position.y += surfaceY - bounds(o).minY - overlap;
+  return o;
+}
+// Same, but the surface is another object's measured top.
+const stack = (o, base, overlap = 0) => seat(o, topOf(base), overlap);
+
+// Anti-collision scatter. Rejects a candidate circle overlapping any taken one,
+// and records the winner so later candidates avoid it too.
+function freeSpot(taken, radius, sample, tries = 60){
+  for(let i=0;i<tries;i++){
+    const p = sample();
+    if(taken.every(t => Math.hypot(p.x-t.x, p.z-t.z) >= t.r + radius)){
+      taken.push({x:p.x, z:p.z, r:radius});
+      return p;
+    }
+  }
+  return null;
+}
+
+// Land clears the wave crest (peak amplitude 2.04) and its footing sinks past
+// the trough, so the ocean surface can never cut through a beach or a quay.
+const LAND_Y    =  2.70;
+const SEA_FLOOR = -4.20;
+
 // ---------- islands ----------
 const islands = [];
+
+// Prefabs: each is authored with its footprint at local y = 0.
+function makePalm(){
+  const g = new THREE.Group();
+  const trunkH = 2.6 + Math.random()*2.0;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.22, trunkH, 5), M(0x8a6b45));
+  trunk.position.y = trunkH/2;                 // cylinder pivot is central, so base lands on 0
+  g.add(trunk);
+  const crown = new THREE.Group();
+  crown.position.y = topOf(trunk);             // crown rides the measured trunk top
+  for(let f=0;f<6;f++){
+    const arm = new THREE.Group();
+    const frondLen = 1.8;
+    const frond = new THREE.Mesh(new THREE.ConeGeometry(0.26, frondLen, 4), M(f%2?0x3f8a4a:0x347a41));
+    frond.rotation.z = -Math.PI/2;             // lay the cone along +X, tip outward
+    frond.position.x = frondLen/2;             // half its length, so the butt meets the trunk
+    arm.add(frond);
+    arm.rotation.z = -0.46 - Math.random()*0.26;   // droop
+    arm.rotation.y = (f/6)*Math.PI*2 + Math.random()*0.3;
+    crown.add(arm);
+  }
+  const nuts = new THREE.Mesh(new THREE.SphereGeometry(0.15, 5, 4), M(0x6d4f2c));
+  nuts.position.y = -0.13;
+  crown.add(nuts);
+  g.add(crown);
+  return g;
+}
+
+function makeCanopyTree(){
+  const g = new THREE.Group();
+  const trunkH = 1.6 + Math.random()*1.1;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.26, trunkH, 5), M(0x715232));
+  trunk.position.y = trunkH/2;
+  g.add(trunk);
+  let below = trunk;
+  for(let l=0;l<3;l++){
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(1.40 - l*0.34, 1.25, 6), M([0x2f6b3a,0x3a7d44,0x46914e][l]));
+    leaf.rotation.y = Math.random()*Math.PI;
+    stack(leaf, below, 0.80);                  // tiers overlap 0.80 so no gap shows
+    g.add(leaf);
+    below = leaf;
+  }
+  return g;
+}
+
+function makeBush(){
+  const r = 0.40 + Math.random()*0.32;
+  const b = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 4), M(0x2c6437));
+  b.scale.y = 0.60;
+  b.position.y = r*0.60;                       // half the squashed height, base on 0
+  return b;
+}
+
 function buildIslands(){
-  const n = 7;
-  for(let i=0;i<n;i++){
-    const a = (i/n)*Math.PI*2 + Math.random();
-    const r = 24 + Math.random()*44;
-    const x = Math.cos(a)*r, z = Math.sin(a)*r;
-    const rad = 4.5 + Math.random()*5;
+  const sandM = M(0xdbc793), jungleM = M(0x3c7a45), rockM = M(0x6b7570);
+  const shoalH = LAND_Y - SEA_FLOOR;           // full column, sea floor to beach
+
+  // Islands avoid each other, the strongholds and the treasure banks.
+  const blocked = bases.map(b => ({x:b.x, z:b.z, r:b.quayR + 9}))
+    .concat(TREASURE_ZONES.map(z => ({x:z.x, z:z.z, r:z.r + 2})));
+
+  for(let i=0;i<7;i++){
+    const rad = 5.0 + Math.random()*4.0;
+    const spot = freeSpot(blocked, rad + 4, () => {
+      const a = Math.random()*Math.PI*2, r = 24 + Math.random()*42;
+      return {x: Math.cos(a)*r, z: Math.sin(a)*r};
+    }, 400);
+    if(!spot) continue;                        // no room left; fewer islands is fine
 
     const g = new THREE.Group();
-    const sand = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad*1.25, 1.3, 9), M(0xd9c48c));
-    sand.position.y = 0.1;
-    const hill = new THREE.Mesh(new THREE.ConeGeometry(rad*0.78, 2.6+Math.random()*2.4, 8), M(0x3c7a45));
-    hill.position.y = 1.7;
-    hill.rotation.y = Math.random()*3;
-    const outcrop = new THREE.Mesh(new THREE.ConeGeometry(rad*0.26, 2.8+Math.random()*2.2, 5), M(0x6b7570));
-    outcrop.position.set((Math.random()-0.5)*rad*0.5, 2.4, (Math.random()-0.5)*rad*0.5);
-    outcrop.rotation.y = Math.random()*3;
-    g.add(sand, hill, outcrop);
 
-    // palms — trunk with a crown of drooping fronds
-    for(let p=0;p<3+Math.random()*3;p++){
-      const pa = Math.random()*Math.PI*2, pr = rad*(0.45+Math.random()*0.35);
-      const th = 2.4+Math.random()*1.8;
-      const lean = (Math.random()-0.5)*0.42;
-      const px = Math.cos(pa)*pr, pz = Math.sin(pa)*pr;
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.22,th,5), M(0x8a6b45));
-      trunk.position.set(px, 0.7+th/2, pz);
-      trunk.rotation.z = lean;
-      g.add(trunk);
-      const crownY = 0.7 + th + 0.05;
-      const crown = new THREE.Group();
-      crown.position.set(px - Math.sin(lean)*th*0.5, crownY, pz);
-      for(let f=0;f<6;f++){
-        const arm = new THREE.Group();
-        const frond = new THREE.Mesh(new THREE.ConeGeometry(0.30, 1.95, 4), M(f%2?0x3f8a4a:0x347a41));
-        frond.rotation.z = Math.PI/2;     // lay the cone along +X, tip outward
-        frond.position.x = 0.98;
-        arm.add(frond);
-        arm.rotation.z = -0.50 - Math.random()*0.22;   // droop
-        arm.rotation.y = (f/6)*Math.PI*2 + Math.random()*0.3;
-        crown.add(arm);
-      }
-      const nuts = new THREE.Mesh(new THREE.SphereGeometry(0.17, 5, 4), M(0x6d4f2c));
-      nuts.position.y = -0.16;
-      crown.add(nuts);
-      g.add(crown);
-    }
+    // Shoal: truncated cone. seat() puts its underside on the sea floor, so its
+    // flat top lands exactly on LAND_Y — above every wave crest.
+    const shoal = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad*1.75, shoalH, 9), sandM);
+    seat(shoal, SEA_FLOOR);
+    g.add(shoal);
+    const beachY = topOf(shoal);               // measured, not assumed
 
-    // broadleaf canopy trees — stacked cones, the jungle mass
-    for(let p=0;p<2+Math.random()*3;p++){
-      const pa = Math.random()*Math.PI*2, pr = rad*Math.random()*0.5;
-      const px = Math.cos(pa)*pr, pz = Math.sin(pa)*pr;
-      const th = 1.5+Math.random()*1.2;
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.26,th,5), M(0x715232));
-      trunk.position.set(px, 1.4+th/2, pz);
-      g.add(trunk);
-      for(let l=0;l<3;l++){
-        const leaf = new THREE.Mesh(new THREE.ConeGeometry(1.5-l*0.36, 1.3, 6), M([0x2f6b3a,0x3a7d44,0x46914e][l]));
-        leaf.position.set(px, 1.4+th+l*0.62, pz);
-        leaf.rotation.y = Math.random()*3;
-        g.add(leaf);
-      }
-    }
+    const hill = new THREE.Mesh(new THREE.ConeGeometry(rad*0.64, 2.6 + Math.random()*2.6, 8), jungleM);
+    hill.rotation.y = Math.random()*Math.PI;
+    seat(hill, beachY, 0.18);                  // bury 0.18 so the join never gaps
+    g.add(hill);
 
-    // undergrowth
-    for(let p=0;p<4+Math.random()*4;p++){
-      const pa = Math.random()*Math.PI*2, pr = rad*(0.2+Math.random()*0.7);
-      const bush = new THREE.Mesh(new THREE.SphereGeometry(0.42+Math.random()*0.4, 6, 4), M(0x2c6437));
-      bush.position.set(Math.cos(pa)*pr, 0.95, Math.sin(pa)*pr);
-      bush.scale.y = 0.62;
-      g.add(bush);
-    }
-    g.position.set(x, 0, z);
+    // Scatter belt: the flat beach ring outside the hill's footprint.
+    const inner = rad*0.68, outer = rad*0.93;
+    const taken = [{x:0, z:0, r:inner}];       // the hill is occupied ground
+    const drop = (obj, footprint, overlap = 0) => {
+      const p = freeSpot(taken, footprint, () => {
+        const a = Math.random()*Math.PI*2, r = inner + Math.random()*(outer-inner);
+        return {x: Math.cos(a)*r, z: Math.sin(a)*r};
+      });
+      if(!p) return false;
+      obj.position.x = p.x; obj.position.z = p.z;
+      seat(obj, beachY, overlap);              // x/z never affect the vertical fit
+      g.add(obj);
+      return true;
+    };
+
+    const outcrop = new THREE.Mesh(new THREE.ConeGeometry(rad*0.20, 2.2+Math.random()*1.8, 5), rockM);
+    outcrop.rotation.y = Math.random()*Math.PI;
+    drop(outcrop, rad*0.24, 0.20);
+    for(let p=0;p<3+Math.floor(Math.random()*3);p++) drop(makePalm(), 1.05);
+    for(let p=0;p<2;p++)                        drop(makeCanopyTree(), 1.55);
+    for(let p=0;p<4;p++)                        drop(makeBush(), 0.55);
+
+    g.position.set(spot.x, 0, spot.z);
     scene.add(g);
-    islands.push({x, z, r:rad});
+    // The shoal flares with depth; its radius at the waterline is what ships must clear.
+    const waterlineR = rad + (rad*0.75) * (LAND_Y / shoalH);
+    islands.push({x:spot.x, z:spot.z, r:waterlineR, mesh:g});
   }
 }
 
 // ---------- birds ----------
 const birds = [];
+
+// A gull is roughly 1.1 units wingtip to wingtip — about a quarter of a hull
+// length, which reads as a bird rather than a pterosaur.
+function makeBird(scale){
+  const g = new THREE.Group();
+  const half = 0.55;                                  // half-wingspan
+  const mat = M(Math.random() < 0.55 ? 0x33393f : 0xdfe8ee);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.075, 5, 4), mat);
+  body.scale.set(1, 0.85, 2.6);                       // stretched along +Z, its flight axis
+  g.add(body);
+  const wings = [];
+  for(const side of [1, -1]){
+    const pivot = new THREE.Group();                  // hinge at the shoulder
+    const w = new THREE.Mesh(new THREE.ConeGeometry(0.10, half, 3), mat);
+    w.rotation.z = -side * Math.PI/2;                 // cone axis (+Y) swings out to ±X
+    w.position.x = side * half/2;                     // half its length: butt meets the shoulder
+    w.scale.set(0.30, 1, 2.0);                        // thin vertically, broad in chord
+    pivot.add(w);
+    g.add(pivot); wings.push(pivot);
+  }
+  g.scale.setScalar(scale);
+  return {g, wings};
+}
+
 function buildBirds(){
-  const wingGeo = new THREE.ConeGeometry(0.34, 1.5, 3);
-  const bodyGeo = new THREE.SphereGeometry(0.20, 5, 4);
-  const mat = M(0x2a3038), matL = M(0xe4ecf2);
-  for(let i=0;i<22;i++){
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(bodyGeo, Math.random()<0.4?matL:mat);
-    body.scale.set(1, 0.8, 2.1);
-    g.add(body);
-    const wl = new THREE.Group(), wr = new THREE.Group();
-    const lw = new THREE.Mesh(wingGeo, Math.random()<0.4?matL:mat);
-    lw.rotation.z = Math.PI/2; lw.position.x = 0.75; lw.scale.set(1,1,0.28);
-    wl.add(lw);
-    const rw = lw.clone(); rw.position.x = -0.75; rw.rotation.z = -Math.PI/2;
-    wr.add(rw);
-    g.add(wl, wr);
-    scene.add(g);
+  for(let i=0;i<10;i++){
+    const b = makeBird(0.75 + Math.random()*0.65);
+    scene.add(b.g);
+    const a = Math.random()*Math.PI*2, r = Math.random()*70;
     birds.push({
-      g, wl, wr,
-      r: 26 + Math.random()*96,
-      a: Math.random()*Math.PI*2,
-      spd: (0.10 + Math.random()*0.16) * (Math.random()<0.25?-1:1),
-      y: 15 + Math.random()*28,
-      flap: Math.random()*7,
-      rate: 5.5 + Math.random()*4
+      ...b,
+      x: Math.cos(a)*r, z: Math.sin(a)*r,
+      y: 11 + Math.random()*26,
+      head: Math.random()*Math.PI*2,
+      spd: 4.5 + Math.random()*7,
+      range: 58 + Math.random()*48,
+      w1: 0.13 + Math.random()*0.45, p1: Math.random()*9,
+      w2: 0.44 + Math.random()*0.95, p2: Math.random()*9,
+      rate: 5.5 + Math.random()*5,  flap: Math.random()*9,
+      bank: 0
     });
   }
 }
+
 function stepBirds(dt, t){
   for(const b of birds){
-    b.a += b.spd*dt;
-    const x = Math.cos(b.a)*b.r, z = Math.sin(b.a)*b.r;
-    b.g.position.set(x, b.y + Math.sin(t*0.5 + b.flap)*1.8, z);
-    b.g.rotation.y = -b.a + (b.spd>0 ? Math.PI/2 : -Math.PI/2);
-    b.g.rotation.z = b.spd > 0 ? -0.28 : 0.28;
-    const f = Math.sin(t*b.rate + b.flap)*0.62;
-    b.wl.rotation.z = f;
-    b.wr.rotation.z = -f;
+    // Heading is nudged by two oscillators on unrelated periods, so the path
+    // wanders and never closes into the circle a constant turn rate would give.
+    let turn = Math.sin(t*b.w1 + b.p1)*0.55 + Math.sin(t*b.w2 + b.p2)*0.32;
+
+    if(Math.hypot(b.x, b.z) > b.range){
+      // Outside its range: bend toward home by the shortest signed angle.
+      const home = Math.atan2(-b.z, -b.x);
+      const delta = ((home - b.head + Math.PI*3) % (Math.PI*2)) - Math.PI;
+      turn += delta * 1.5;
+    }
+
+    b.head += turn*dt;
+    b.x += Math.cos(b.head)*b.spd*dt;
+    b.z += Math.sin(b.head)*b.spd*dt;
+    b.y += Math.sin(t*0.37 + b.p1)*2.4*dt;
+
+    b.bank += (Math.max(-1, Math.min(1, turn*0.55)) - b.bank) * Math.min(1, dt*3);
+    b.g.position.set(b.x, b.y, b.z);
+    // Model flies along +Z; heading is measured from +X, hence the quarter turn.
+    b.g.rotation.y = Math.PI/2 - b.head;
+    b.g.rotation.z = -b.bank*0.55;
+
+    const f = Math.sin(t*b.rate + b.flap)*0.55;
+    b.wings[0].rotation.z =  f;
+    b.wings[1].rotation.z = -f;
   }
 }
 
 // ---------- bases ----------
 const bases = [];
-// Each stronghold is built to advertise its crew's temperament from a distance.
+
+// Every stronghold stands on a quay whose deck clears the wave crest and whose
+// footing sinks past the trough, so the sea never cuts through the stone.
+function makeQuay(rTop, rBottom, sides, mat){
+  const h = LAND_Y - SEA_FLOOR;
+  const q = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBottom, h, sides), mat);
+  return seat(q, SEA_FLOOR);          // underside on the floor, deck lands on LAND_Y
+}
+
+// Each builder returns the part the colours should fly from, so the flagpole is
+// planted on a measured surface rather than a guessed height.
 const BASE_BUILDERS = [
 
   // ---- 0 · IRONHOLD — the forge. Black iron, spikes, trophies, furnace glow.
-  function(g, f){
+  function(g){
     const iron = M(0x2b2c30), dark = M(0x1d1e22), ember = M(0xff7a2a);
-    g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(8.4, 9.6, 1.8, 6), M(0x3b3226)), 0, 0.2, 0));
-    const keep = new THREE.Mesh(new THREE.BoxGeometry(6.4, 7.6, 6.4), iron);
-    keep.position.y = 4.6; keep.rotation.y = 0.4;
+    const quay = makeQuay(10.2, 11.6, 6, M(0x3b3226));
+    g.add(quay);
+    const deckY = topOf(quay);
+
+    const keep = new THREE.Mesh(new THREE.BoxGeometry(6.2, 7.4, 6.2), iron);
+    seat(keep, deckY);
     g.add(keep);
-    // chimney stacks belching heat
-    for(const [cx,cz] of [[-2.2,-2.2],[2.2,2.2]]){
-      const st = new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.95,4.4,6), dark);
-      st.position.set(cx, 10.2, cz);
-      const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,0.5,6), ember);
-      glow.position.set(cx, 12.5, cz);
+
+    // Chimneys stand on the keep's measured roof; the ember cap tops each stack.
+    for(const [cx, cz] of [[-2.0,-2.0],[2.0,2.0]]){
+      const st = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.94, 4.2, 6), dark);
+      st.position.x = cx; st.position.z = cz;
+      stack(st, keep, 0.30);
+      const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.60, 0.60, 0.45, 6), ember);
+      glow.position.x = cx; glow.position.z = cz;
+      stack(glow, st, 0.10);
       g.add(st, glow);
     }
-    const mouth = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, 0.4), ember);
-    mouth.position.set(0, 3.0, 3.3); mouth.rotation.y = 0.4;
+
+    // Furnace mouth, flush against the keep's forward face.
+    const face = bounds(keep).maxZ;
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, 0.35), ember);
+    mouth.position.set(0, deckY + 1.4, face + 0.35/2);   // half its depth clear of the wall
     g.add(mouth);
-    // spiked palisade
+
+    // Spiked palisade around the quay rim.
+    const rim = bounds(quay).maxX * 0.90;
     for(let i=0;i<14;i++){
       const a = (i/14)*Math.PI*2;
-      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.34, 3.0, 4), dark);
-      sp.position.set(Math.cos(a)*7.6, 2.4, Math.sin(a)*7.6);
-      sp.rotation.z = Math.cos(a)*0.22; sp.rotation.x = -Math.sin(a)*0.22;
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.32, 2.8, 4), dark);
+      sp.position.x = Math.cos(a)*rim; sp.position.z = Math.sin(a)*rim;
+      seat(sp, deckY);
       g.add(sp);
     }
-    // taken masts, mounted as trophies
+
+    // Captured masts, mounted as trophies, flying rivals' colours.
     for(let i=0;i<3;i++){
-      const a = -0.9 + i*0.9;
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.13,5.2,4), M(0x4f3a26));
-      m.position.set(Math.cos(a)*5.6, 3.6, Math.sin(a)*5.6);
-      m.rotation.z = 0.36;
-      const rag = new THREE.Mesh(new THREE.PlaneGeometry(1.5,0.9), new THREE.MeshLambertMaterial({color:[0xe6a428,0x3b8fd4,0x3fa87a][i], side:THREE.DoubleSide}));
-      rag.position.set(Math.cos(a)*5.6+0.8, 5.6, Math.sin(a)*5.6);
+      const a = -0.85 + i*0.85;
+      const mx = Math.cos(a)*5.2, mz = Math.sin(a)*5.2;
+      const mastH = 5.0;
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, mastH, 4), M(0x4f3a26));
+      m.position.set(mx, 0, mz);
+      seat(m, deckY);
+      const rag = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.85),
+        new THREE.MeshLambertMaterial({color:[0xe6a428,0x3b8fd4,0x3fa87a][i], side:THREE.DoubleSide}));
+      // Luff hard against the mast and hung just under its head, so the cloth
+      // is attached to something instead of hovering next to it.
+      rag.position.set(mx + 1.4/2 + 0.09, topOf(m) - 0.85/2 - 0.18, mz);
+      rag.rotation.y = a;
       g.add(m, rag);
     }
-    return {poleY: 12.0, poleAt:[0,0]};
+    return {poleBase: keep, poleAt: [0, 0], quayR: 10.2};
   },
 
-  // ---- 1 · GOLDHAVEN — the vault. Gilded domes, walls, visible bullion.
-  function(g, f){
+  // ---- 1 · GOLDHAVEN — the vault. Gilded domes, walls, bullion on the quay.
+  function(g){
     const stone = M(0xd8c79a), gold = M(0xf0bf3c), gold2 = M(0xd8a422);
-    g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(8.6, 9.6, 1.8, 12), stone), 0, 0.2, 0));
+    const quay = makeQuay(10.8, 12.1, 12, stone);
+    g.add(quay);
+    const deckY = topOf(quay);
+
     const vault = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 4.2, 5.0, 12), stone);
-    vault.position.y = 3.4;
+    seat(vault, deckY);
+    // A hemisphere's flat face is its own y=0, so stacking sets it flush on the drum.
     const dome = new THREE.Mesh(new THREE.SphereGeometry(3.7, 14, 8, 0, Math.PI*2, 0, Math.PI/2), gold);
-    dome.position.y = 5.8;
+    stack(dome, vault, 0.05);
     g.add(vault, dome);
-    // ring of lesser domes
+
     for(let i=0;i<4;i++){
       const a = i*Math.PI/2 + 0.78;
-      const t = new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.3,3.4,8), stone);
-      t.position.set(Math.cos(a)*5.6, 2.6, Math.sin(a)*5.6);
+      const tx = Math.cos(a)*5.8, tz = Math.sin(a)*5.8;
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.30, 3.4, 8), stone);
+      t.position.x = tx; t.position.z = tz;
+      seat(t, deckY);
       const d2 = new THREE.Mesh(new THREE.SphereGeometry(1.22, 10, 6, 0, Math.PI*2, 0, Math.PI/2), gold2);
-      d2.position.set(Math.cos(a)*5.6, 4.3, Math.sin(a)*5.6);
+      d2.position.x = tx; d2.position.z = tz;
+      stack(d2, t, 0.04);
       g.add(t, d2);
     }
-    // low gilded wall
+
+    const rim = bounds(quay).maxX * 0.92;
     for(let i=0;i<20;i++){
       const a = (i/20)*Math.PI*2;
-      const b = new THREE.Mesh(new THREE.BoxGeometry(1.3,1.5,0.6), stone);
-      b.position.set(Math.cos(a)*7.8, 1.6, Math.sin(a)*7.8);
+      const b = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.4, 0.55), stone);
+      b.position.x = Math.cos(a)*rim; b.position.z = Math.sin(a)*rim;
       b.rotation.y = -a;
+      seat(b, deckY);
       g.add(b);
     }
-    // the hoard, stacked on the quay
-    for(let i=0;i<9;i++){
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.85,0.34,0.5), gold);
-      bar.position.set(-5.4 + (i%3)*0.95, 1.3 + Math.floor(i/3)*0.36, 4.6 + (i%2)*0.3);
-      bar.rotation.y = 0.2;
-      g.add(bar);
+
+    // The hoard: three courses of bullion, each stacked on the one beneath.
+    const barH = 0.32;
+    for(let row=0;row<3;row++){
+      for(let c=0;c<3;c++){
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(0.85, barH, 0.48), gold);
+        bar.position.x = -5.0 + c*0.92;
+        bar.position.z = 4.4 + (row%2)*0.22;
+        seat(bar, deckY + row*barH);          // course height is exactly row × bar height
+        g.add(bar);
+      }
     }
-    return {poleY: 9.6, poleAt:[0,0]};
+    return {poleBase: dome, poleAt: [0, 0], quayR: 10.8};
   },
 
-  // ---- 2 · TEMPEST — the beacon. Lighthouse on wave-battered rock.
-  function(g, f){
+  // ---- 2 · TEMPEST — the beacon. Every course stacked on the one below it,
+  //         which is what stops the lantern floating clear of the tower.
+  function(g){
     const rock = M(0x54606b), pale = M(0xe2e8ec), band = M(0x2f6f9e), lamp = M(0xffe9a8);
+    const quay = makeQuay(9.8, 11.3, 9, rock);
+    g.add(quay);
+    const deckY = topOf(quay);
+
+    // Storm rocks around the base, seated on the quay rim.
     for(let i=0;i<5;i++){
-      const a = (i/5)*Math.PI*2;
-      const r = new THREE.Mesh(new THREE.ConeGeometry(2.6+Math.random(), 3.4+Math.random()*2, 5), rock);
-      r.position.set(Math.cos(a)*6.2, 1.0, Math.sin(a)*6.2);
-      r.rotation.y = Math.random()*3;
+      const a = (i/5)*Math.PI*2 + 0.3;
+      const r = new THREE.Mesh(new THREE.ConeGeometry(1.5+Math.random()*0.9, 3.0+Math.random()*1.8, 5), rock);
+      r.position.x = Math.cos(a)*5.6; r.position.z = Math.sin(a)*5.6;
+      r.rotation.y = Math.random()*Math.PI;
+      seat(r, deckY, 0.3);
       g.add(r);
     }
-    g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(7.4, 9.0, 2.0, 9), rock), 0, 0.3, 0));
-    // banded tower
+
+    let below = quay;
     for(let i=0;i<5;i++){
-      const seg = new THREE.Mesh(new THREE.CylinderGeometry(1.5-i*0.14, 1.72-i*0.14, 2.4, 10), i%2?band:pale);
-      seg.position.y = 2.4 + i*2.35;
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(1.50-i*0.13, 1.70-i*0.13, 2.4, 10), i%2 ? band : pale);
+      stack(seg, below, 0.03);                // 3cm bite so the courses never gap
       g.add(seg);
+      below = seg;
     }
-    const gallery = new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,0.3,10), rock);
-    gallery.position.y = 14.2;
-    const light = new THREE.Mesh(new THREE.CylinderGeometry(0.95,0.95,1.5,8), lamp);
-    light.position.y = 15.1;
+    const gallery = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 0.28, 10), rock);
+    stack(gallery, below);
+    const light = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 1.5, 8), lamp);
+    stack(light, gallery);
     const cap = new THREE.Mesh(new THREE.ConeGeometry(1.25, 1.4, 8), band);
-    cap.position.y = 16.5;
+    stack(cap, light);
     g.add(gallery, light, cap);
-    return {poleY: 18.6, poleAt:[0,0]};
+
+    return {poleBase: cap, poleAt: [0, 0], quayR: 9.8};
   },
 
   // ---- 3 · STONEWATCH — the bastion. Squat, mossy, shut tight.
-  function(g, f){
+  function(g){
     const stone = M(0x7d8378), moss = M(0x4a6b47), dark = M(0x5c6157);
-    g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(8.8, 9.8, 1.6, 8), M(0x6f7368)), 0, 0.2, 0));
+    const quay = makeQuay(11.0, 12.3, 8, M(0x6f7368));
+    g.add(quay);
+    const deckY = topOf(quay);
+
     const keep = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.9, 3.6, 8), stone);
-    keep.position.y = 2.6;
+    seat(keep, deckY);
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(4.7, 4.7, 0.5, 8), dark);
-    cap.position.y = 4.6;
+    stack(cap, keep);
     g.add(keep, cap);
-    // crenellations
+
+    // Crenellations ride the parapet's measured top, set on its outer radius.
+    const parapetY = topOf(cap), crenR = 4.7 - 0.35;
     for(let i=0;i<16;i++){
       const a = (i/16)*Math.PI*2;
-      const c = new THREE.Mesh(new THREE.BoxGeometry(1.1,1.0,0.7), stone);
-      c.position.set(Math.cos(a)*4.5, 5.3, Math.sin(a)*4.5);
+      const c = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 0.7), stone);
+      c.position.x = Math.cos(a)*crenR; c.position.z = Math.sin(a)*crenR;
       c.rotation.y = -a;
+      seat(c, parapetY, 0.05);
       g.add(c);
     }
-    // corner watchtowers
+
     for(let i=0;i<4;i++){
       const a = i*Math.PI/2 + 0.78;
-      const t = new THREE.Mesh(new THREE.CylinderGeometry(1.0,1.25,5.2,7), stone);
-      t.position.set(Math.cos(a)*6.4, 3.2, Math.sin(a)*6.4);
+      const tx = Math.cos(a)*6.5, tz = Math.sin(a)*6.5;
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.25, 5.0, 7), stone);
+      t.position.x = tx; t.position.z = tz;
+      seat(t, deckY);
       const rf = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1.7, 7), moss);
-      rf.position.set(Math.cos(a)*6.4, 6.6, Math.sin(a)*6.4);
+      rf.position.x = tx; rf.position.z = tz;
+      stack(rf, t, 0.08);
       g.add(t, rf);
     }
-    // moss creeping over everything
+
+    // Moss clinging to the quay, scattered without overlapping.
+    const taken = [{x:0, z:0, r:5.2}];
     for(let i=0;i<10;i++){
-      const a = Math.random()*Math.PI*2, r = 3.0+Math.random()*4.4;
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.5+Math.random()*0.5, 6, 4), moss);
-      m.position.set(Math.cos(a)*r, 1.2+Math.random()*3.6, Math.sin(a)*r);
+      const p = freeSpot(taken, 0.6, () => {
+        const a = Math.random()*Math.PI*2, r = 5.4 + Math.random()*2.6;
+        return {x: Math.cos(a)*r, z: Math.sin(a)*r};
+      });
+      if(!p) continue;
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.45+Math.random()*0.4, 6, 4), moss);
       m.scale.y = 0.5;
+      m.position.x = p.x; m.position.z = p.z;
+      seat(m, deckY, 0.1);
       g.add(m);
     }
-    return {poleY: 8.4, poleAt:[0,0]};
+    return {poleBase: cap, poleAt: [0, 0], quayR: 11.0};
   }
 ];
 
+// A ship never appears on top of her own fortress: pick a bearing out to sea and
+// stand off well clear of the stonework and the pier.
+function seaSpot(b){
+  const a = b.dockAng + (Math.random()-0.5)*2.2;
+  const r = b.quayR + 8 + Math.random()*7;
+  return { x: b.x + Math.sin(a)*r, z: b.z + Math.cos(a)*r };
+}
+
+// Dock geometry, in the stronghold's LOCAL frame. Each base group is rotated so
+// its local +Z faces the open sea, so the pier just runs out along +Z.
+const PIER = { w:2.8, from:7.2, to:23.0, side:3.35 };   // side > w/2 + hull clearance
+
+// Per-fortress gate treatment. Same structure, four different hands.
+const GATE_STYLE = [
+  { stone:0x303237, inner:0x212328, iron:0x15161a,      // Ironhold: iron and fire
+    trim(c, GW, GH, M, gz){
+      for(const sx of [-1, 1]){
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.5, 5), M(0x24262a));
+        post.position.set(sx*(GW/2 + 0.55), 0.75, gz + 0.5);
+        const brz = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.13, 0.3, 6), M(0x24262a));
+        brz.position.set(sx*(GW/2 + 0.55), 1.6, gz + 0.5);
+        const fire = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 5), M(0xff8a30));
+        fire.position.set(sx*(GW/2 + 0.55), 1.94, gz + 0.5);
+        c.add(post, brz, fire);
+      }
+      const glow = new THREE.Mesh(new THREE.BoxGeometry(GW*0.75, 0.12, 0.08), M(0xff7a2a));
+      glow.position.set(0, 0.07, gz - 0.6);   // furnace light under the gate
+      c.add(glow);
+    }},
+  { stone:0xd6c396, inner:0xc0ad80, iron:0x8a6d1c,      // Goldhaven: gilded and banded
+    trim(c, GW, GH, M, gz){
+      const band = new THREE.Mesh(new THREE.BoxGeometry(GW + 1.1, 0.18, 0.24), M(0xf0bf3c));
+      band.position.set(0, GH + 0.36, gz + 0.12);
+      c.add(band);
+      for(const sx of [-1, 1]){
+        const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.34, 6), M(0xf3c94a));
+        lamp.position.set(sx*(GW/2 + 0.42), GH*0.72, gz + 0.34);
+        c.add(lamp);
+      }
+    }},
+  { stone:0x5b6771, inner:0x49545d, iron:0x2f6f9e,      // Tempest: weathered, timber-braced
+    trim(c, GW, GH, M, gz){
+      for(const sx of [-1, 1]){
+        const brace = new THREE.Mesh(new THREE.BoxGeometry(0.18, GH*0.85, 0.18), M(0x6a5233));
+        brace.position.set(sx*(GW/2 + 0.34), GH*0.42, gz + 0.30);
+        brace.rotation.z = sx*0.09;
+        c.add(brace);
+      }
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(GW + 0.9, 0.22, 0.24), M(0x6a5233));
+      beam.position.set(0, GH + 0.30, gz + 0.30);
+      c.add(beam);
+    }},
+  { stone:0x828879, inner:0x6d7367, iron:0x3d4640,      // Stonewatch: mossed over
+    trim(c, GW, GH, M, gz){
+      for(let i=0;i<8;i++){
+        const mo = new THREE.Mesh(new THREE.SphereGeometry(0.18 + Math.random()*0.16, 5, 4), M(0x4a6b47));
+        mo.scale.y = 0.5;
+        mo.position.set((Math.random()-0.5)*(GW + 2.2), 0.2 + Math.random()*GH*0.9, gz + 0.36);
+        c.add(mo);
+      }
+    }}
+];
+
+function buildPier(g, f, quayR){
+  const plank = M(0x6b5236), post = M(0x4d3a26), iron = M(0x3a3d42);
+  const from = quayR - 0.6;                       // planking starts at the quay edge
+  const len = PIER.to - from, midZ = (from + PIER.to)/2;
+
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(PIER.w, 0.24, len), plank);
+  deck.position.z = midZ;
+  seat(deck, LAND_Y - 0.24);                 // walking surface flush with the quay
+  g.add(deck);
+
+  // Pilings, driven from the deck's measured underside down past the trough.
+  const under = bounds(deck).minY;
+  for(let i=0;i<5;i++){
+    for(const sx of [-1, 1]){
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.20, under - SEA_FLOOR + 0.4, 5), post);
+      p.position.x = sx*(PIER.w/2 - 0.22);
+      p.position.z = from + 0.7 + (i/4)*(len - 1.4);
+      seat(p, SEA_FLOOR);
+      g.add(p);
+    }
+  }
+  // Bollards at the mooring head.
+  for(const sx of [-1, 1]){
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.19, 0.6, 6), iron);
+    b.position.x = sx*(PIER.w/2 - 0.3);
+    b.position.z = PIER.to - 0.9;
+    seat(b, LAND_Y);
+    g.add(b);
+  }
+
+  // ---- curtain wall and sea gate ---------------------------------------
+  // A ring wall around the stronghold, broken by one gate facing the pier.
+  // Simple massing on purpose: the previous recessed arch had too many small
+  // parts at this scale and read as debris stuck to the rock.
+  const cave = new THREE.Group();
+  const gate = GATE_STYLE[f.idx];
+  const wallM = M(gate.stone), capM = M(gate.inner), ironM = M(gate.iron);
+
+  const WR = quayR - 1.1;          // wall stands just inside the quay edge
+  const WH = 2.9, WT = 0.85;       // height and thickness
+  const GAP = 0.30;                // half-angle of the gate opening, radians
+  const SEGS = 26;
+
+  const wall = new THREE.Group();
+  for(let i=0;i<SEGS;i++){
+    const a = (i/SEGS)*Math.PI*2;
+    // Local +Z is the pier bearing, so the gap is centred on angle 0 in Z.
+    const off = Math.atan2(Math.sin(a), Math.cos(a));
+    if(Math.abs(off) < GAP) continue;                       // leave the gateway clear
+    const segW = (Math.PI*2*WR)/SEGS + 0.25;                // overlap so no light shows
+    const blk = new THREE.Mesh(new THREE.BoxGeometry(segW, WH, WT), wallM);
+    blk.position.set(Math.sin(a)*WR, WH/2, Math.cos(a)*WR);
+    blk.rotation.y = a;
+    wall.add(blk);
+    const cren = new THREE.Mesh(new THREE.BoxGeometry(segW*0.52, 0.55, WT*0.8), capM);
+    cren.position.set(Math.sin(a)*WR, WH + 0.275, Math.cos(a)*WR);
+    cren.rotation.y = a;
+    wall.add(cren);
+  }
+  cave.add(wall);
+
+  // Two square towers flanking the opening, taller than the wall.
+  const TW = 1.9, TH = WH + 1.7;
+  for(const sx of [-1, 1]){
+    const a = sx*(GAP + 0.16);
+    const tw = new THREE.Mesh(new THREE.BoxGeometry(TW, TH, TW), wallM);
+    tw.position.set(Math.sin(a)*WR, TH/2, Math.cos(a)*WR);
+    tw.rotation.y = a;
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(TW + 0.34, 0.34, TW + 0.34), capM);
+    roof.position.set(tw.position.x, TH + 0.17, tw.position.z);
+    roof.rotation.y = a;
+    cave.add(tw, roof);
+    for(let k=0;k<4;k++){                                   // merlons on the tower top
+      const ma = k*Math.PI/2 + Math.PI/4;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.46, 0.5), wallM);
+      m.position.set(tw.position.x + Math.sin(a + ma)*TW*0.5,
+                     TH + 0.34 + 0.23,
+                     tw.position.z + Math.cos(a + ma)*TW*0.5);
+      m.rotation.y = a;
+      cave.add(m);
+    }
+  }
+
+  // The gateway itself: a lintel spanning the towers, dark behind, portcullis down
+  // from the lintel. Everything sits on the wall's own radius.
+  const GWID = 2*WR*Math.sin(GAP + 0.16) - TW*0.2;
+  const gz = Math.cos(GAP)*WR;
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(GWID + TW, 0.7, WT + 0.3), wallM);
+  lintel.position.set(0, WH - 0.1, gz);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(GWID, WH, 0.5), M(0x090c0f));
+  back.position.set(0, WH/2, gz - 1.5);
+  const passage = new THREE.Mesh(new THREE.BoxGeometry(GWID, WH - 0.5, 3.0), M(0x0b0f13));
+  passage.position.set(0, (WH - 0.5)/2, gz - 1.5);
+  cave.add(lintel, back, passage);
+
+  const barsN = 7, gridH = 1.15;
+  for(let i=0;i<barsN;i++){
+    const bx = -GWID/2 + 0.30 + i*((GWID - 0.6)/(barsN-1));
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.10, gridH, 0.10), ironM);
+    bar.position.set(bx, WH - 0.45 - gridH/2, gz - 0.15);
+    cave.add(bar);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.2, 4), ironM);
+    tip.rotation.x = Math.PI;
+    tip.position.set(bx, WH - 0.45 - gridH - 0.09, gz - 0.15);
+    cave.add(tip);
+  }
+  for(let r=0;r<2;r++){
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(GWID - 0.5, 0.09, 0.09), ironM);
+    rail.position.set(0, WH - 0.58 - r*(gridH - 0.28), gz - 0.15);
+    cave.add(rail);
+  }
+
+  gate.trim(cave, GWID, WH, M, gz);
+
+  // The wall ring is already in quay-local coordinates; just lift it onto the deck.
+  cave.position.set(0, LAND_Y, 0);
+  g.add(cave);
+}
+
 function buildBases(){
-  const d = 60;
+  // Pulled in from 60 so the ring sits inside BOUND (78) — otherwise ships clamp
+  // short of the quay and appear to sail into the walls.
+  const d = 50;
   const spots = [[-d,-d],[d,-d],[d,d],[-d,d]];
   FACTIONS.forEach((f,i)=>{
     const [x,z] = spots[i];
     const g = new THREE.Group();
     const meta = BASE_BUILDERS[i](g, f);
 
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,4.6,4), M(0x4a4034));
-    pole.position.set(meta.poleAt[0], meta.poleY, meta.poleAt[1]);
-    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.6,1.5),
+    const poleH = 4.6;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, poleH, 4), M(0x4a4034));
+    pole.position.x = meta.poleAt[0]; pole.position.z = meta.poleAt[1];
+    stack(pole, meta.poleBase, 0.15);          // planted on a measured roof
+    const flagW = 2.6, flagH = 1.5;
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(flagW, flagH),
       new THREE.MeshLambertMaterial({color:f.color, side:THREE.DoubleSide}));
-    flag.position.set(meta.poleAt[0]+1.35, meta.poleY+1.6, meta.poleAt[1]);
+    // Luff against the pole: offset by half the flag's width, hung below the truck.
+    flag.position.set(meta.poleAt[0] + flagW/2, topOf(pole) - flagH/2 - 0.15, meta.poleAt[1]);
     g.add(pole, flag);
 
+    buildPier(g, f, meta.quayR);
+
     g.position.set(x, 0, z);
-    g.rotation.y = Math.atan2(-x, -z);   // face the open sea
+    g.rotation.y = Math.atan2(-x, -z);         // face the open sea
     scene.add(g);
 
-    bases.push({x, z, faction:i, score:0, flag, mesh:g});
+    const b = {x, z, faction:i, score:0, flag, mesh:g, quayR: meta.quayR};
+    bases.push(b);
+    placeDock(b);
   });
 }
 
@@ -647,44 +1147,54 @@ const shipHulls = [];   // raycast targets
 let ships = [];
 
 function makeCrewman(color, isCaptain){
+  // Authored feet-on-zero, so dropping a crewman on a deck is position.y = deckY.
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.17, 0.44, 6), M(isCaptain?0x2a2b33:0x7d6f5a));
-  body.position.y = 0.22;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 7, 5), M(0xc99e75));
-  head.position.y = 0.53;
-  g.add(body, head);
+  const legH = 0.20, bodyH = 0.34, headR = 0.115;
+
+  const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.13, legH, 6), M(0x3f3830));
+  legs.position.y = legH/2;                          // central pivot, so feet land on 0
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.17, bodyH, 6),
+                              M(isCaptain ? 0x6d2028 : 0x7d6f5a));
+  body.position.y = legH + bodyH/2;                  // stands on the legs
+  const head = new THREE.Mesh(new THREE.SphereGeometry(headR, 7, 5), M(0xc99e75));
+  head.position.y = legH + bodyH + headR;            // sphere centre one radius above the shoulders
+  g.add(legs, body, head);
+
+  const headY   = head.position.y;                   // eye level
+  const headTop = headY + headR;
 
   if(isCaptain){
-    // tricorne
-    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.185, 0.20, 7), M(0x15161b));
-    crown.position.y = 0.68;
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.045, 3), M(0x15161b));
-    brim.position.y = 0.60; brim.rotation.y = Math.PI/6;
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.052, 6, 5), M(0xf0ece2));
-    skull.position.set(0, 0.685, 0.16);
-    // eye patch — disc over one eye plus the strap around the head
-    const patch = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.02, 7), M(0x121317));
-    patch.position.set(0.055, 0.555, 0.113); patch.rotation.x = Math.PI/2;
-    const strap = new THREE.Mesh(new THREE.TorusGeometry(0.132, 0.011, 4, 12), M(0x121317));
-    strap.position.y = 0.545; strap.rotation.y = Math.PI/2; strap.rotation.x = 0.26;
-    // coat, sash and cutlass
-    const coat = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.20, 0.30, 6), M(0x6d2028));
-    coat.position.y = 0.13;
+    // Tricorne: brim flush on the crown of the head, hat body on top of the brim.
+    const brimH = 0.045, crownH = 0.20;
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, brimH, 3), M(0x15161b));
+    brim.position.y = headTop - 0.02; brim.rotation.y = Math.PI/6;
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.185, crownH, 7), M(0x15161b));
+    crown.position.y = brim.position.y + brimH/2 + crownH/2;
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), M(0xf0ece2));
+    skull.position.set(0, crown.position.y, 0.155);  // on the front of the hat band
+
+    // Eye patch sits on the face: one radius forward, slightly above centre.
+    const patch = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.02, 7), M(0x121317));
+    patch.position.set(0.05, headY + 0.03, headR*0.94);
+    patch.rotation.x = Math.PI/2;
+    const strap = new THREE.Mesh(new THREE.TorusGeometry(headR*1.02, 0.011, 4, 12), M(0x121317));
+    strap.position.y = headY + 0.03; strap.rotation.y = Math.PI/2; strap.rotation.x = 0.22;
+
     const sash = new THREE.Mesh(new THREE.CylinderGeometry(0.172, 0.172, 0.06, 7), M(0xc8a33a));
-    sash.position.y = 0.255;
-    const sword = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.52, 0.035), M(0xd8dde2));
-    sword.position.set(0.19, 0.3, 0.02); sword.rotation.z = -0.45;
-    g.add(crown, brim, skull, patch, strap, coat, sash, sword);
+    sash.position.y = legH + bodyH*0.45;
+    const sword = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.46, 0.032), M(0xd8dde2));
+    sword.position.set(0.19, legH + bodyH*0.5, 0.02); sword.rotation.z = -0.42;
+    g.add(brim, crown, skull, patch, strap, sash, sword);
   }else{
-    const bandana = new THREE.Mesh(new THREE.CylinderGeometry(0.135,0.135,0.1,7), M(color));
-    bandana.position.y = 0.60;
+    const bandana = new THREE.Mesh(new THREE.CylinderGeometry(headR*1.04, headR*1.04, 0.09, 7), M(color));
+    bandana.position.y = headY + headR*0.42;         // tied round the top of the skull
     g.add(bandana);
   }
   return g;
 }
 
-// Hull proportions, timber and canvas per faction. Overall length is held
-// roughly constant so combat and pickup ranges stay meaningful.
+// Hull proportions, timber and canvas per faction. Length is held constant so
+// combat and pickup ranges stay meaningful across factions.
 const SHIP_STYLE = [
   { beam:2.15, wood:0x2f3034, trim:0x8e2b25, canvas:0x7d2b28, deck:0x6d5a44, mastH:4.3, sailW:2.45 }, // Ironhold
   { beam:2.45, wood:0x7a5a2e, trim:0xe0b23a, canvas:0xf0e2b4, deck:0xc3a267, mastH:4.0, sailW:2.60 }, // Goldhaven
@@ -692,107 +1202,305 @@ const SHIP_STYLE = [
   { beam:2.30, wood:0x5d5a4a, trim:0x3fa87a, canvas:0xcfd8c4, deck:0x8d8a76, mastH:3.7, sailW:2.30 }, // Stonewatch
 ];
 
+const LEN = 4.6, HULL_H = 1.18, DRAFT = 0.46;
+
 function makeShip(fi){
-  const f = FACTIONS[fi], st = SHIP_STYLE[fi];
+  const f = FACTIONS[fi], st = SHIP_STYLE[fi], BEAM = st.beam;
   const outer = new THREE.Group();   // heading
   const tilt  = new THREE.Group();   // wave pitch/roll
   outer.add(tilt);
 
-  const woodM = M(st.wood), trimM = M(st.trim), deckM = M(st.deck);
+  const woodM = M(st.wood), trimM = M(st.trim), deckM = M(st.deck), sparM = M(0x4f3a26);
 
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(st.beam, 0.85, 4.2), woodM);
-  hull.position.y = 0.42;
-  const bow = new THREE.Mesh(new THREE.ConeGeometry(st.beam*0.5, 1.9, 4), woodM);
-  bow.position.set(0, 0.42, 2.9);
-  bow.rotation.set(Math.PI/2, 0, Math.PI/4);
-  bow.scale.set(1, 1, 0.85);
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(st.beam*0.88, 0.12, 3.9), deckM);
-  deck.position.y = 0.86;
-  const stern = new THREE.Mesh(new THREE.BoxGeometry(st.beam*0.9, 0.9, 0.9), M(tone(st.wood,-0.06)));
-  stern.position.set(0, 1.2, -1.7);
-  const rail = new THREE.Mesh(new THREE.BoxGeometry(st.beam*0.94, 0.14, 4.0), trimM);
-  rail.position.y = 0.93;
+  // --- hull ---------------------------------------------------------------
+  // Local y = 0 is the waterline. The hull straddles it: DRAFT below, the rest
+  // as freeboard, so the ship floats in the sea instead of skating over it.
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(BEAM, HULL_H, LEN), woodM);
+  seat(hull, -DRAFT);
+  const sheerY = topOf(hull);        // measured top of the planking
+  tilt.add(hull);
 
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, st.mastH, 6), M(0x4f3a26));
-  mast.position.y = 0.9 + st.mastH/2;
-  const sail = new THREE.Mesh(new THREE.PlaneGeometry(st.sailW, st.mastH*0.60),
-    new THREE.MeshLambertMaterial({color:st.canvas, side:THREE.DoubleSide}));
-  sail.position.set(0, 0.9 + st.mastH*0.60, -0.12);
-  const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.62),
-    new THREE.MeshLambertMaterial({color:f.color, side:THREE.DoubleSide}));
-  flag.position.set(0.58, 0.9 + st.mastH + 0.35, 0);
+  // --- prow ---------------------------------------------------------------
+  // A 4-sided cone laid along +Z. Spun 45° about its own axis so its flat faces
+  // line up with the box hull; a 4-gon's flats sit at r/√2 from the axis, so
+  // r = (BEAM/2)·√2 makes the join exactly as wide as the hull it meets.
+  const prowR = (BEAM/2) * Math.SQRT2, prowLen = 1.55;
+  const prow = new THREE.Group();    // outer: squashes the square section
+  const lay  = new THREE.Group();    // inner: lays the cone forward
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(prowR*0.13, prowR, prowLen, 4), woodM);
+  stem.rotation.y = Math.PI/4;
+  lay.add(stem);
+  lay.rotation.x = Math.PI/2;        // cone tip (+Y) swings to +Z: forward
+  prow.add(lay);
+  prow.scale.y = HULL_H / BEAM;      // square cross-section squashed to the hull's rectangle
+  // Cone base ends up half its length aft of centre, so this puts the join on
+  // the hull's bow face, minus a sliver of overlap.
+  prow.position.set(0, hull.position.y, LEN/2 + prowLen/2 - 0.06);
+  tilt.add(prow);
 
-  tilt.add(hull, bow, deck, stern, rail, mast, sail, flag);
+  // --- decking ------------------------------------------------------------
+  const deckLen = LEN*0.94;
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(BEAM*0.90, 0.12, deckLen), deckM);
+  seat(deck, sheerY, 0.04);
+  const deckY = topOf(deck);         // every spar, crate and crewman starts here
+  tilt.add(deck);
 
-  // ---- faction character pieces ----
-  if(fi === 0){                       // Ironhold: iron ram, spiked rail, black sails
-    const ram = new THREE.Mesh(new THREE.ConeGeometry(0.30, 1.5, 4), M(0x26272b));
-    ram.position.set(0, 0.42, 4.1); ram.rotation.x = Math.PI/2;
-    tilt.add(ram);
-    for(let i=0;i<6;i++){
-      const side = i<3 ? 1 : -1;
-      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 4), M(0x1c1d21));
-      sp.position.set(side*st.beam*0.47, 1.16, -1.3 + (i%3)*1.3);
-      sp.rotation.z = -side*0.5;
-      tilt.add(sp);
-    }
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.19, 6, 5), M(0xeee8dc));
-    skull.position.set(0, 1.62, -2.05);
-    tilt.add(skull);
-  } else if(fi === 1){                // Goldhaven: gilded stern lanterns, fat merchant hull
-    for(const sx of [-0.55, 0.55]){
-      const lant = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.16,0.34,6), M(0xf3c94a));
-      lant.position.set(sx, 1.82, -2.05);
-      tilt.add(lant);
-    }
-    const trimBand = new THREE.Mesh(new THREE.BoxGeometry(st.beam*1.01, 0.13, 4.05), M(0xe0b23a));
-    trimBand.position.y = 0.66;
-    const figurehead = new THREE.Mesh(new THREE.SphereGeometry(0.22, 7, 6), M(0xf0c74e));
-    figurehead.position.set(0, 0.78, 3.75);
-    tilt.add(trimBand, figurehead);
-  } else if(fi === 2){                // Tempest: topsail, long bowsprit, sleek and overcanvased
-    const top = new THREE.Mesh(new THREE.PlaneGeometry(st.sailW*0.72, 1.35),
-      new THREE.MeshLambertMaterial({color:st.canvas, side:THREE.DoubleSide}));
-    top.position.set(0, 0.9 + st.mastH*0.92, -0.12);
-    const sprit = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,2.4,5), M(0x4f3a26));
-    sprit.position.set(0, 1.05, 4.2); sprit.rotation.x = Math.PI/2 - 0.22;
-    const jib = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.6),
-      new THREE.MeshLambertMaterial({color:st.canvas, side:THREE.DoubleSide}));
-    jib.position.set(0, 1.95, 3.35); jib.rotation.y = Math.PI/2;
-    tilt.add(top, sprit, jib);
-  } else {                            // Stonewatch: shield wall, reinforced stubby hull
-    for(let i=0;i<8;i++){
-      const side = i<4 ? 1 : -1;
-      const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.26,0.08,7), M(i%2?0x3fa87a:0x6f7a68));
-      sh.position.set(side*st.beam*0.5, 1.10, -1.5 + (i%4)*1.0);
-      sh.rotation.z = Math.PI/2;
-      tilt.add(sh);
-    }
-    const ribs = new THREE.Mesh(new THREE.BoxGeometry(st.beam*1.02, 0.55, 1.0), M(0x4b4a3e));
-    ribs.position.set(0, 0.55, 0.4);
-    tilt.add(ribs);
+  for(const side of [1, -1]){        // bulwarks, flush with the deck's edge
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.30, deckLen), trimM);
+    rail.position.x = side * (BEAM*0.90/2 - 0.07);
+    seat(rail, deckY);
+    tilt.add(rail);
   }
 
-  // crew — captain at the wheel, hands forward
+  // --- quarterdeck and helm ------------------------------------------------
+  const QD_D = 1.30;
+  const qd = new THREE.Mesh(new THREE.BoxGeometry(BEAM*0.86, 0.28, QD_D), M(tone(st.deck, -0.05)));
+  qd.position.z = -deckLen/2 + QD_D/2;     // hard aft, flush with the stern edge
+  seat(qd, deckY);
+  tilt.add(qd);
+  const qdY = topOf(qd);
+
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.34, 5), sparM);
+  post.position.z = qd.position.z + QD_D*0.24;   // wheel forward, helmsman behind it
+  seat(post, qdY);
+  const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.20, 0.032, 5, 10), sparM);
+  wheel.position.set(0, topOf(post), post.position.z);   // hub rides the post's measured top
+  tilt.add(post, wheel);
+  for(let i=0;i<6;i++){                                   // spokes through the hub
+    const sp = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.44, 0.028), sparM);
+    sp.position.copy(wheel.position);
+    sp.rotation.z = (i/6)*Math.PI;
+    tilt.add(sp);
+  }
+  const helmZ = post.position.z - 0.42;    // captain stands abaft the wheel, facing the bow
+
+  // --- mast, yard, sail, colours -------------------------------------------
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, st.mastH, 6), sparM);
+  mast.position.z = LEN*0.06;              // just forward of midships
+  seat(mast, deckY);                       // heel planted on the planking
+  tilt.add(mast);
+  const mastTop = topOf(mast);
+
+  const yardY = deckY + st.mastH*0.86;
+  const yard = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, st.sailW*1.06, 5), sparM);
+  yard.rotation.z = Math.PI/2;             // athwartships
+  yard.position.set(0, yardY, mast.position.z);
+  const sailH = st.mastH*0.58;
+  const sail = new THREE.Mesh(new THREE.PlaneGeometry(st.sailW, sailH),
+    new THREE.MeshLambertMaterial({color:st.canvas, side:THREE.DoubleSide}));
+  sail.position.set(0, yardY - sailH/2, mast.position.z - 0.06);   // hangs from the yard
+  // Transom board across the stern, so stern ornament has something to sit on.
+  const transom = new THREE.Mesh(new THREE.BoxGeometry(BEAM*0.86, 0.52, 0.16), M(tone(st.wood,-0.05)));
+  transom.position.set(0, deckY + 0.14, -LEN/2 + 0.08);
+  tilt.add(transom);
+
+  const flagW = 1.05, flagH = 0.58;
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(flagW, flagH),
+    new THREE.MeshLambertMaterial({color:f.color, side:THREE.DoubleSide}));
+  tilt.add(yard, sail);
+
+  // --- faction character ----------------------------------------------------
+  if(fi === 0){                             // Ironhold: ram, spiked rails, skull on the transom
+    // Iron ram: pivot group sits at the ram's INBOARD end, so it grows forward
+    // out of the stem instead of being centred somewhere ahead of it.
+    const ramLen = 1.5, ram = new THREE.Group();
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.26, ramLen, 4), M(0x26272b));
+    spike.rotation.x = Math.PI/2;            // tip forward
+    spike.position.z = ramLen/2;             // half its length ahead of the pivot
+    spike.rotation.y = Math.PI/4;            // flats aligned with the prow's
+    ram.add(spike);
+    ram.position.set(0, hull.position.y - 0.10, bounds(prow).maxZ - 0.55);   // buried in the stem
+    tilt.add(ram);
+    for(let i=0;i<6;i++){
+      const side = i < 3 ? 1 : -1;
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.46, 4), M(0x1c1d21));
+      sp.position.set(side*(BEAM*0.90/2 - 0.07), 0, -1.2 + (i%3)*1.2);
+      seat(sp, deckY + 0.30);               // standing on the bulwark's top edge
+      sp.rotation.z = -side*0.42;
+      tilt.add(sp);
+    }
+    // Transom skull: cranium, jaw and sunken eyes. A bare sphere read as a ball.
+    const bone = M(0xeee8dc), socket = M(0x1a1a1e);
+    const emblem = new THREE.Group();
+    const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.17, 7, 6), bone);
+    cranium.scale.set(1, 0.92, 0.80);
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.09, 0.20), bone);
+    jaw.position.y = -0.155;                       // hung under the cranium
+    for(const ex of [-0.062, 0.062]){
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.062, 0.05), socket);
+      eye.position.set(ex, 0.015, 0.125);          // set into the face
+      emblem.add(eye);
+    }
+    for(const bx of [-1, 1]){                      // crossed bones behind the skull
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.045, 0.045), bone);
+      b.rotation.z = bx*0.72; b.position.z = -0.06;
+      emblem.add(b);
+    }
+    emblem.add(cranium, jaw);
+    emblem.position.set(0, deckY + 0.16, -LEN/2 + 0.02);   // bolted to the transom board
+    tilt.add(emblem);
+  } else if(fi === 1){                      // Goldhaven: stern lanterns, gilt strake, figurehead
+    for(const sx of [-0.55, 0.55]){
+      const lant = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.34, 6), M(0xf3c94a));
+      lant.position.x = sx; lant.position.z = qd.position.z;
+      seat(lant, qdY);
+      tilt.add(lant);
+    }
+    const strake = new THREE.Mesh(new THREE.BoxGeometry(BEAM*1.01, 0.13, LEN*0.98), M(0xe0b23a));
+    strake.position.y = sheerY - 0.22;      // a gilt band just under the sheer
+    // Figurehead: a gilded prow ornament rooted on the stem head and raked
+    // forward, with two swept scrolls. Previously this was a floating sphere.
+    const gilt = M(0xf0c74e);
+    const fig = new THREE.Group();
+    const bust = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.62, 6), gilt);
+    bust.rotation.x = Math.PI/2 + 0.35;            // tip forward, angled down over the water
+    bust.position.z = 0.62/2;                      // half its length: butt meets the stem
+    fig.add(bust);
+    for(const sx of [-1, 1]){
+      const scroll = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.028, 4, 8, Math.PI), gilt);
+      scroll.position.set(sx*0.13, 0.04, 0.20);
+      scroll.rotation.set(0, sx*0.6, sx*1.2);
+      fig.add(scroll);
+    }
+    fig.position.set(0, sheerY - 0.08, LEN/2 + 0.05);   // rooted on the hull's bow face
+    tilt.add(strake, fig);
+  } else if(fi === 2){                      // Tempest: topsail, bowsprit, jib — overcanvased
+    const topH = 1.30;
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(st.sailW*0.70, topH),
+      new THREE.MeshLambertMaterial({color:st.canvas, side:THREE.DoubleSide}));
+    // Topsail sits between the yard and the masthead — it used to be set above
+    // the masthead, which put it straight through the colours.
+    top.position.set(0, (yardY + mastTop)/2, mast.position.z - 0.06);
+    // Bowsprit: pivot at the inboard end, rooted on the foredeck just inside the
+    // stem, raking up and forward. It used to hang in the air ahead of the bow.
+    const spritLen = 2.4, sprit = new THREE.Group();
+    const spar = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.085, spritLen, 5), sparM);
+    spar.rotation.x = Math.PI/2;             // lay along +Z
+    spar.position.z = spritLen/2;            // aft end lands on the pivot
+    sprit.add(spar);
+    sprit.position.set(0, deckY + 0.10, LEN/2 - 0.35);
+    sprit.rotation.x = -0.26;                // negative pitch rakes +Z upward
+    tilt.add(sprit);
+    // Jib: a real triangle whose three corners are the sprit's measured tip, the
+    // masthead, and the stem. It used to be a rectangle hanging in mid-air.
+    const tip = bounds(sprit);
+    const jg = new THREE.BufferGeometry();
+    jg.setAttribute('position', new THREE.Float32BufferAttribute([
+      0, tip.maxY,        tip.maxZ,            // tack, out on the bowsprit
+      0, mastTop - 0.55,  mast.position.z,     // head, up at the masthead
+      0, deckY + 0.15,    LEN/2 - 0.30         // clew, down at the stem
+    ], 3));
+    jg.computeVertexNormals();
+    const jib = new THREE.Mesh(jg,
+      new THREE.MeshLambertMaterial({color:st.canvas, side:THREE.DoubleSide}));
+    tilt.add(top, jib);
+  } else {                                  // Stonewatch: shield wall along the bulwarks
+    for(let i=0;i<8;i++){
+      const side = i < 4 ? 1 : -1;
+      const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.08, 7), M(i%2 ? 0x3fa87a : 0x6f7a68));
+      sh.rotation.z = Math.PI/2;            // face outboard
+      sh.position.set(side*(BEAM*0.90/2 + 0.02), deckY + 0.16, -1.5 + (i%4)*1.0);
+      tilt.add(sh);
+    }
+  }
+
+  // --- colours --------------------------------------------------------------
+  // Flown last, from a truck stepped above the MEASURED top of everything else
+  // aloft. Placing it against mastTop meant any faction that added a topsail
+  // buried its own flag in canvas.
+  const rig = bounds(tilt);
+  const truck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 1.0, 5), sparM);
+  truck.position.set(0, 0, mast.position.z);
+  seat(truck, rig.maxY - 0.12);
+  tilt.add(truck);
+  // Entirely above the highest canvas, so no faction can fly its colours inside
+  // its own topsail whatever it adds to the rig.
+  flag.position.set(flagW/2 + 0.07, rig.maxY + 0.16 + flagH/2, mast.position.z);
+  tilt.add(flag);
+
+  // --- crew, cargo ----------------------------------------------------------
   const crewGroup = new THREE.Group();
   tilt.add(crewGroup);
 
-  // cargo crates, revealed as the hold fills
+  // Cargo sits forward of the mast, clear of the working deck.
+  const crateSlots = [[-BEAM*0.19, LEN*0.20], [BEAM*0.19, LEN*0.20], [0, LEN*0.36]];
   const crates = [];
   for(let i=0;i<CAPACITY;i++){
     const c = makeChest();
-    c.scale.setScalar(0.62);
-    c.position.set(-0.38 + (i%2)*0.76, 0.94, -0.45 + Math.floor(i/2)*0.68);
+    c.scale.setScalar(0.55);
+    const [cx, cz] = crateSlots[i % crateSlots.length];
+    c.position.x = cx; c.position.z = cz;
     c.rotation.y = Math.PI/2 + (Math.random()-0.5)*0.3;
+    seat(c, deckY);                          // chests rest on the planking
     c.visible = false;
     tilt.add(c); crates.push(c);
+  }
+
+  // Guns: three a side, run out through the bulwark. The station a hand mans is
+  // the inboard end of the middle gun, so crew and muzzle stay consistent.
+  const gunZ = [-1.05, 0.0, 1.05];
+  for(const side of [1, -1]){
+    for(const gz of gunZ){
+      const carriage = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.16, 0.42), M(0x53402c));
+      carriage.position.set(side*(BEAM*0.90/2 - 0.26), 0, gz);
+      seat(carriage, deckY);
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.10, 0.86, 7), M(0x2c3035));
+      barrel.rotation.z = side*Math.PI/2;                  // run out over the side
+      barrel.position.set(side*(BEAM*0.90/2 + 0.13), topOf(carriage) + 0.09, gz);
+      tilt.add(carriage, barrel);
+    }
+  }
+  const gunStations = {
+    1:  [ BEAM*0.24, 0.0],
+    '-1': [-BEAM*0.24, 0.0]
+  };
+  const muzzles = { 1: [ BEAM*0.62, deckY + 0.28, 0.0], '-1': [-BEAM*0.62, deckY + 0.28, 0.0] };
+
+  // Fishing station: davit, hook and a coil of line at the starboard rail. This
+  // is the station the HAUL task sends a hand to, so it needs to be visible.
+  const fsX = st.beam*0.30, fsZ = LEN*0.12;
+  const davit = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.85, 5), sparM);
+  davit.position.set(fsX + 0.16, 0, fsZ);
+  seat(davit, deckY);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.55, 5), sparM);
+  arm.rotation.z = Math.PI/2;                    // reaches outboard over the water
+  arm.position.set(fsX + 0.42, topOf(davit) - 0.05, fsZ);
+  const hook = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.018, 4, 8), M(0x9aa3ab));
+  hook.position.set(fsX + 0.68, topOf(davit) - 0.30, fsZ);
+  const coil = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.045, 5, 9), M(0xb9a882));
+  coil.rotation.x = Math.PI/2;
+  coil.position.set(fsX - 0.10, 0, fsZ - 0.42);
+  seat(coil, deckY);
+  tilt.add(davit, arm, hook, coil);
+
+  // Crew stations: sampled on the open main deck and rejected if they clash with
+  // the mast, the cargo, the fishing station or each other.
+  const occupied = [{x:0, z:mast.position.z, r:0.34}, {x:fsX, z:fsZ, r:0.38},
+                    {x:BEAM*0.26, z:0, r:0.30}, {x:-BEAM*0.26, z:0, r:0.30}]
+    .concat(crateSlots.map(([cx, cz]) => ({x:cx, z:cz, r:0.36})));
+  const crewSlots = [];
+  for(let i=0;i<MAX_CREW-1;i++){
+    const p = freeSpot(occupied, 0.18, () => ({
+      x: (Math.random()-0.5) * BEAM*0.68,
+      z: -LEN*0.17 + Math.random() * LEN*0.58
+    }), 120);
+    if(p) crewSlots.push([p.x, p.z]);
+  }
+  // A narrow-beamed hull can genuinely run out of free deck. Fall back to a ring
+  // rather than shipping a crewless vessel.
+  if(!crewSlots.length){
+    for(let i=0;i<MAX_CREW-1;i++){
+      const a = (i/(MAX_CREW-1))*Math.PI*2;
+      crewSlots.push([Math.cos(a)*BEAM*0.26, LEN*0.10 + Math.sin(a)*LEN*0.20]);
+    }
   }
 
   scene.add(outer);
   hull.userData.shipRef = true;
   shipHulls.push(hull);
 
-  return {outer, tilt, hull, crewGroup, crates, flag};
+  return {outer, tilt, hull, crewGroup, crates, flag, deckY, qdY, helmZ, crewSlots,
+          gunStations, muzzles};
 }
 
 function spawnShip(fi){
@@ -800,10 +1508,12 @@ function spawnShip(fi){
   const v = makeShip(fi);
   const s = {
     fi, ...v,
-    x: b.x + (Math.random()-0.5)*14,
-    z: b.z + (Math.random()-0.5)*14,
+    x: seaSpot(b).x,
+    z: seaSpot(b).z,
     heading: Math.random()*Math.PI*2,
-    crew: 3, cargo: 0, hull: 3, hauled: 0,
+    crew: 3, cargo: 0, hp: MAX_HP, hauled: 0,
+    vx: 0, vz: 0, heel: 0, spd: 0,   // carried velocity, so the hull glides
+    gunCd: Math.random()*4, gunning: false, alarm: 0, alarmBy: null, sinking: 0, berth: null,
     state:'SEEK', target:null, cd:0, sway:Math.random()*10,
     alive:true, respawn:0
   };
@@ -813,19 +1523,173 @@ function spawnShip(fi){
   return s;
 }
 
+// =====================================================================
+//  CREW AS AGENTS
+//  Nothing on a ship happens instantly any more. Work is a task with a station
+//  and a duration; the captain issues it, a hand walks over, a ring above his
+//  head fills, and only then does the world change. Off watch, hands wander the
+//  deck and push each other aside rather than standing in rows.
+// =====================================================================
+const WALK = 1.15;            // deck units per second
+const RING_SEGS = 14;
+
+function makeRing(){
+  const g = new THREE.Group();
+  const segs = [];
+  const R = 0.20;
+  for(let i=0;i<RING_SEGS;i++){
+    const a = (i/RING_SEGS)*Math.PI*2;
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.02, 0.075), M(0xffd76b));
+    seg.position.set(Math.cos(a)*R, 0, Math.sin(a)*R);
+    seg.rotation.y = -a;
+    seg.visible = false;
+    g.add(seg); segs.push(seg);
+  }
+  for(let i=0;i<RING_SEGS;i++){               // dim backing ring, always on
+    const a = (i/RING_SEGS)*Math.PI*2;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.07), M(0x2a2f36));
+    b.position.set(Math.cos(a)*R, -0.012, Math.sin(a)*R);
+    b.rotation.y = -a;
+    g.add(b);
+  }
+  g.visible = false;
+  return {g, segs};
+}
+function setRing(ring, p){
+  const n = Math.round(Math.max(0, Math.min(1, p))*RING_SEGS);
+  for(let i=0;i<RING_SEGS;i++) ring.segs[i].visible = i < n;
+}
+
 function setCrew(s){
   const g = s.crewGroup;
   while(g.children.length) g.remove(g.children[0]);
+  s.hands = [];
   const n = Math.min(s.crew, MAX_CREW);
   for(let i=0;i<n;i++){
-    const c = makeCrewman(FACTIONS[s.fi].color, i===0);
-    if(i===0){ c.position.set(0, 0.92, -1.35); }
-    else {
-      const row = Math.floor((i-1)/2), col = (i-1)%2;
-      c.position.set(-0.45 + col*0.9, 0.92, 0.9 - row*0.72);
+    const isCap = i === 0;
+    const body = makeCrewman(FACTIONS[s.fi].color, isCap);
+    const ring = makeRing();
+    ring.g.position.y = 0.95;                 // just above the hat
+    body.add(ring.g);
+    const home = isCap ? [0, s.helmZ]
+                       : (s.crewSlots[(i-1) % s.crewSlots.length] || [0, LEN*0.10]);
+    body.position.set(home[0], isCap ? s.qdY : s.deckY, home[1]);
+    g.add(body);
+    s.hands.push({
+      body, ring, isCap,
+      x: home[0], z: home[1],
+      hx: home[0], hz: home[1],               // station to drift back to
+      tx: home[0], tz: home[1],
+      face: isCap ? 0 : Math.random()*Math.PI*2,
+      state: 'idle', task: null, t: 0, dur: 1,
+      idleCd: Math.random()*3,
+      pace: Math.random() < 0.5 ? 1 : -1
+    });
+  }
+}
+
+// A hand walks toward its target, shouldering past anyone in the way, and turns
+// to face where it is going. Positions are ship-local, so the whole crew rides
+// the hull's pitch and roll for free.
+function stepHands(s, dt){
+  if(!s.hands) return;
+  const st = SHIP_STYLE[s.fi];
+  const halfBeam = st.beam*0.32, fwd = LEN*0.40, aft = -LEN*0.16;
+
+  for(const h of s.hands){
+    if(h.state === 'working'){
+      h.t += dt;
+      setRing(h.ring, h.t/h.dur);
+      h.ring.g.visible = true;
+      if(h.t >= h.dur){
+        h.ring.g.visible = false;
+        finishTask(s, h);
+      }
+    }else if(h.state === 'idle'){
+      h.idleCd -= dt;
+      if(h.idleCd <= 0){
+        h.idleCd = 2.5 + Math.random()*4;
+        if(h.isCap){
+          // The captain does not leave the wheel. He shifts his weight and
+          // nothing more — pacing meant he was away from the helm half the time.
+          h.tx = (Math.random()-0.5)*0.16;
+          h.tz = s.helmZ + (Math.random()-0.5)*0.10;
+          h.idleCd = 2.0 + Math.random()*2.5;
+        }else{
+          h.tx = (Math.random()-0.5)*halfBeam*2;
+          h.tz = aft + Math.random()*(fwd - aft);
+        }
+      }
     }
-    c.rotation.y = Math.PI + (Math.random()-0.5)*0.6;
-    g.add(c);
+
+    // steer
+    let dx = h.tx - h.x, dz = h.tz - h.z;
+    const d = Math.hypot(dx, dz);
+    if(d > 0.06){
+      const spd = (h.state === 'toStation' ? WALK*1.25 : WALK) * dt;
+      const step = Math.min(spd, d);
+      h.x += dx/d*step; h.z += dz/d*step;
+      h.face += (Math.atan2(dx, dz) - h.face + Math.PI*3) % (Math.PI*2) - Math.PI > 0 ? 0 : 0;
+      h.face = Math.atan2(dx, dz);
+    }else if(h.state === 'toStation'){
+      h.state = 'working'; h.t = 0;
+      h.ring.g.visible = true; setRing(h.ring, 0);
+    }else if(h.state === 'returning'){
+      h.state = 'idle';
+    }
+
+    // separation: hands never occupy the same plank
+    for(const o of s.hands){
+      if(o === h) continue;
+      const ox = h.x-o.x, oz = h.z-o.z;
+      const od = Math.hypot(ox, oz);
+      if(od < 0.42 && od > 1e-4){
+        const push = (0.42-od)*0.5;
+        h.x += ox/od*push; h.z += oz/od*push;
+      }
+    }
+
+    // stay on deck, and on the right deck
+    h.z = Math.max(-LEN*0.46, Math.min(LEN*0.44, h.z));
+    h.x = Math.max(-st.beam*0.36, Math.min(st.beam*0.36, h.x));
+    const onQuarter = h.z < -LEN*0.20;
+    h.body.position.set(h.x, onQuarter ? s.qdY : s.deckY, h.z);
+    h.body.rotation.y = h.face;
+  }
+}
+
+// The captain is the brain: he looks for work and puts a free hand on it.
+function assignTask(s, type, station, dur, payload){
+  if(!s.hands || s.hands.length < 2) return null;
+  const free = s.hands.find(h => !h.isCap && h.state === 'idle');
+  if(!free) return null;
+  free.state = 'toStation';
+  free.tx = station[0]; free.tz = station[1];
+  free.dur = dur; free.t = 0;
+  free.task = {type, payload};
+  return free;
+}
+
+function finishTask(s, h) {
+  const task = h.task;
+  h.task = null;
+  h.state = 'returning';
+  h.tx = h.hx; h.tz = h.hz;
+  if(!task) return;
+  if(task.type === 'GUN'){
+    fireCannon(s, task.payload.target, task.payload.side);
+    s.gunCd = GUN_COOL;
+    s.gunning = false;
+    return;
+  }
+  if(task.type === 'HAUL'){
+    const tr = task.payload;
+    if(tr && !tr.gone && s.cargo < CAPACITY){
+      tr.gone = true; tr.taken = true;
+      scene.remove(tr.mesh);
+      s.cargo++;
+    }
+    s.hauling = null;
   }
 }
 
@@ -854,17 +1718,36 @@ function makeChest(){
   return g;
 }
 
-function spawnTreasure(){
-  let x, z;
-  if(Math.random() < 0.4 && islands.length){          // washed up on a beach
-    const i = islands[Math.floor(Math.random()*islands.length)];
-    const a = Math.random()*Math.PI*2;
-    x = i.x + Math.cos(a)*(i.r+1.5);
-    z = i.z + Math.sin(a)*(i.r+1.5);
-  }else{                                               // adrift
-    const a = Math.random()*Math.PI*2, r = Math.random()*BOUND*0.92;
-    x = Math.cos(a)*r; z = Math.sin(a)*r;
+// Chests no longer appear anywhere at random// Chests no longer appear anywhere at random, and never on land. They surface in
+// fixed grounds: one great deep in the middle of the map — the richest and the
+// most contested — plus two shallower banks flanking each stronghold.
+const TREASURE_ZONES = [];
+function buildTreasureZones(){
+  TREASURE_ZONES.push({x:0, z:0, r:21, weight:5});           // the great deep
+  for(const b of bases){
+    const inward = Math.atan2(-b.z, -b.x);                   // bearing toward the middle
+    for(const off of [-0.62, 0.62]){                         // one bank either side of it
+      const a = inward + off;
+      TREASURE_ZONES.push({x: b.x + Math.cos(a)*25, z: b.z + Math.sin(a)*25, r:8.5, weight:1});
+    }
   }
+}
+
+function spawnTreasure(){
+  const total = TREASURE_ZONES.reduce((a, z) => a + z.weight, 0);
+  let x, z, ok = false;
+  for(let tries=0; tries<40 && !ok; tries++){
+    let pick = Math.random()*total, zone = TREASURE_ZONES[0];
+    for(const zn of TREASURE_ZONES){ pick -= zn.weight; if(pick <= 0){ zone = zn; break; } }
+    const a = Math.random()*Math.PI*2;
+    const r = zone.r * Math.sqrt(Math.random());             // sqrt fills the disc evenly
+    x = zone.x + Math.cos(a)*r;
+    z = zone.z + Math.sin(a)*r;
+    ok = Math.hypot(x, z) < BOUND*0.97
+      && islands.every(i => dist(x, z, i.x, i.z) > i.r + 3.5)   // never on a beach
+      && bases.every(b => dist(x, z, b.x, b.z) > 12);
+  }
+  if(!ok) return;
   const m = makeChest();
   m.position.set(x, 0, z);
   m.rotation.y = Math.random()*Math.PI*2;
@@ -912,7 +1795,21 @@ function think(s){
   const f = FACTIONS[s.fi], b = bases[s.fi];
 
   if(s.cargo >= Math.max(1, Math.round(CAPACITY*f.greed))){
-    s.state='RETURN'; s.target={x:b.x,z:b.z}; return;
+    s.state='RETURN';
+    const berth = claimBerth(s, b);
+    s.target = berth ? {x:berth.x, z:berth.z} : {x:b.hold.x, z:b.hold.z};
+    return;
+  }
+  // Being fired on is information. A cautious crew runs from whoever shot at
+  // them; a bold one turns and answers it.
+  if(s.alarm > 0 && s.alarmBy && s.alarmBy.alive){
+    if(Math.random() < f.caution){
+      s.state = 'FLEE';
+      s.target = {x: s.x + (s.x - s.alarmBy.x)*2, z: s.z + (s.z - s.alarmBy.z)*2};
+    }else{
+      s.state = 'HUNT'; s.target = s.alarmBy;
+    }
+    return;
   }
   const threat = threatNear(s);
   if(threat && Math.random() < f.caution){
@@ -926,41 +1823,247 @@ function think(s){
   }
   const t = nearestTreasure(s);
   if(t){ s.state='SEEK'; s.target=t; return; }
-  s.state='RETURN'; s.target={x:b.x,z:b.z};
+  s.state='RETURN';
+  const berth2 = claimBerth(s, b);
+  s.target = berth2 ? {x:berth2.x, z:berth2.z} : {x:b.hold.x, z:b.hold.z};
+}
+
+// =====================================================================
+//  BROADSIDE GUNNERY
+//  A gun crew can only fire across the beam, so a ship has to work herself
+//  abeam of her prey before anything happens. Manning the gun is a task like
+//  any other, the shot is a real ballistic body that can and often does miss,
+//  and being shot at is information the target acts on.
+// =====================================================================
+const shots = [];
+const SHOT_G = 20, SHOT_V = 30, GUN_RANGE = 30, GUN_COOL = 5.0;
+
+// Starboard unit vector for a ship on heading h. Forward is (sin h, cos h);
+// rotating that by a quarter turn gives (cos h, -sin h).
+const rightOf = h => ({x: Math.cos(h), z: -Math.sin(h)});
+
+// Which battery, if any, bears on the target. Returns 0 when she is bow- or
+// stern-on and no gun can be brought to bear.
+function bearing(s, o){
+  const dx = o.x - s.x, dz = o.z - s.z;
+  const d = Math.hypot(dx, dz) || 1;
+  const r = rightOf(s.heading);
+  const lat = (dx/d)*r.x + (dz/d)*r.z;      // component across the beam
+  return Math.abs(lat) >= 0.87 ? (lat > 0 ? 1 : -1) : 0;   // within ~30° of abeam
+}
+
+function gunTarget(s){
+  let best = null, bd = GUN_RANGE;
+  for(const o of ships){
+    if(o === s || !o.alive || o.fi === s.fi) continue;
+    const d = dist(s.x, s.z, o.x, o.z);
+    if(d < bd){ bd = d; best = o; }
+  }
+  return best;
+}
+
+function fireCannon(s, target, side){
+  if(!target || !target.alive) return;
+  const m = s.muzzles[side];
+  const ch = Math.cos(s.heading), sh = Math.sin(s.heading);
+  // muzzle offset is ship-local; rotate it into the world
+  const mx = s.x + m[0]*ch + m[2]*sh;
+  const mz = s.z - m[0]*sh + m[2]*ch;
+  const my = waveH(s.x, s.z, simT) + m[1];
+
+  const d = Math.hypot(target.x - mx, target.z - mz);
+  const tf = Math.max(0.4, d / SHOT_V);              // time of flight
+  // Lead the target, but badly: a gun crew reads her course by eye, so only
+  // part of the true lead is applied. Then spoil the aim, with error growing on
+  // range. Together these are what make a broadside worth manoeuvring for
+  // rather than a formality — most shots go in the water.
+  const LEAD = 0.62;
+  const err = 0.40 + 0.105 * d;
+  const px = target.x + target.vx*tf*LEAD + gauss()*err;
+  const pz = target.z + target.vz*tf*LEAD + gauss()*err;
+  const py = waveH(target.x, target.z, simT) + 0.4;
+
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), M(0x1b1e22));
+  ball.position.set(mx, my, mz);
+  scene.add(ball);
+  shots.push({
+    mesh: ball, from: s, x: mx, y: my, z: mz,
+    vx: (px - mx)/tf,
+    vy: (py - my)/tf + 0.5*SHOT_G*tf,               // elevation for the arc
+    vz: (pz - mz)/tf,
+    life: tf + 2.5
+  });
+
+  // The target hears it and reacts, whether or not the ball lands.
+  target.alarm = 8; target.alarmBy = s;
+}
+
+function stepShots(dt, t){
+  for(let i=shots.length-1;i>=0;i--){
+    const p = shots[i];
+    p.vy -= SHOT_G*dt;
+    p.x += p.vx*dt; p.y += p.vy*dt; p.z += p.vz*dt;
+    p.life -= dt;
+    p.mesh.position.set(p.x, p.y, p.z);
+
+    let done = p.life <= 0 || p.y < waveH(p.x, p.z, t) - 0.3;
+    if(!done){
+      for(const o of ships){
+        if(!o.alive || o === p.from) continue;       // no shooting your own gun crew
+        if(Math.hypot(p.x - o.x, p.z - o.z) < 1.6 && Math.abs(p.y - waveH(o.x, o.z, t)) < 2.4){
+          o.hp -= 22;
+          if(o.crew > 1 && Math.random() < 0.35){ o.crew--; setCrew(o); }
+          o.alarm = 8; o.alarmBy = p.from;
+          if(o.hp <= 0) sink(o, p.from);
+          done = true; break;
+        }
+      }
+    }
+    if(done){ scene.remove(p.mesh); shots.splice(i,1); }
+  }
+}
+
+function spawnTreasureAt(x, z){
+  const m = makeChest();
+  m.position.set(x, 0, z);
+  m.rotation.y = Math.random()*Math.PI*2;
+  scene.add(m);
+  treasure.push({x, z, mesh:m, taken:false});
+}
+
+function sink(s, killer){
+  if(!s.alive) return;
+  s.alive = false;
+  s.sinking = 5.0;                       // she goes down over five seconds
+  s.respawn = 11 + Math.random()*5;
+  if(s.hauling){ s.hauling.claimed = null; s.hauling = null; }
+  releaseBerth(s);
+  // Her hold breaks open. Whatever she was carrying floats free for anyone.
+  for(let i=0;i<s.cargo;i++){
+    const a = Math.random()*Math.PI*2, r = 1.2 + Math.random()*2.4;
+    spawnTreasureAt(s.x + Math.cos(a)*r, s.z + Math.sin(a)*r);
+  }
+  s.cargo = 0;
+  if(killer && killer.alive && killer.crew < MAX_CREW && Math.random() < 0.4){
+    killer.crew++; setCrew(killer);     // survivors press-ganged aboard
+  }
 }
 
 function fight(a, b){
-  const roll = x => x.crew*0.8 + x.hull*1.1 + Math.random()*5;
+  const roll = x => x.crew*0.8 + (x.hp/MAX_HP)*3.3 + Math.random()*5;
   const win = roll(a) >= roll(b) ? a : b;
   const lose = win===a ? b : a;
 
   const stolen = lose.cargo;
   win.cargo = Math.min(CAPACITY, win.cargo + stolen);
   lose.cargo = 0;
-  lose.hull -= 1;
+  lose.hp -= 34;
   if(win.crew < MAX_CREW && Math.random()<0.45){ win.crew++; setCrew(win); }
   if(lose.crew > 1 && Math.random()<0.6){ lose.crew--; setCrew(lose); }
 
-  if(lose.hull <= 0){
-    lose.alive = false;
-    lose.respawn = 6 + Math.random()*4;
-    lose.outer.visible = false;
-  }
+  if(lose.hp <= 0) sink(lose);
   a.cd = b.cd = 1.6;
 }
 
+// Porters live in world space, not on the ship. The hull is moored and still
+// while they work, so they can walk off it and down the pier without any
+// reparenting. One chest per trip: out to the cave, in, back for the next.
+const porters = [];
+function spawnPorter(s, b){
+  const g = makeCrewman(FACTIONS[s.fi].color, false);
+  const chest = makeChest();
+  chest.scale.setScalar(0.42);
+  chest.position.set(0, 0.42, 0.26);          // carried at chest height, out front
+  g.add(chest);
+  const start = (s.berth || b.berths[0]).gw;   // step off onto the planking
+  g.position.set(start.x, LAND_Y, start.z);
+  scene.add(g);
+  porters.push({
+    g, chest, ship:s, base:b, home:start,
+    x:start.x, z:start.z,
+    legs:[b.head, b.cave],                    // out along the pier, then the mouth
+    leg:0, phase:'out', pause:0
+  });
+}
+function stepPorters(dt){
+  for(let i=porters.length-1;i>=0;i--){
+    const p = porters[i];
+    if(p.pause > 0){ p.pause -= dt; p.g.visible = false; continue; }
+    const goal = p.phase === 'out' ? p.legs[p.leg] : (p.leg === 0 ? p.base.head : p.home);
+    const dx = goal.x - p.x, dz = goal.z - p.z;
+    const d = Math.hypot(dx, dz);
+    const step = Math.min(2.0*dt, d);
+    if(d > 0.05){ p.x += dx/d*step; p.z += dz/d*step; p.g.rotation.y = Math.atan2(dx, dz); }
+    p.g.position.set(p.x, LAND_Y, p.z);
+    if(d > 0.18) continue;
+
+    if(p.phase === 'out'){
+      p.leg++;
+      if(p.leg >= p.legs.length){
+        // Through the gate. This is the moment treasure actually counts.
+        p.base.score++; p.ship.hauled++;
+        p.chest.visible = false;
+        p.phase = 'back'; p.leg = 1; p.pause = 0.5;   // a beat inside the cave
+      }
+    }else{
+      if(p.leg === 1){ p.leg = 0; }                   // pier head reached, carry on aft
+      else { scene.remove(p.g); porters.splice(i,1); }
+    }
+    if(p.pause > 0) continue;
+    p.g.visible = true;
+  }
+}
+
+let sweepCd = 4;
+let genPending = null;   // set inside step(), acted on after it returns
 function step(dt, t){
+  // Loose chests float: the wave field swings ±2 units, so a chest pinned at
+  // y = 0 would spend half its life underwater and half of it airborne.
+  for(const c of treasure){
+    if(!c.taken) c.mesh.position.y = waveH(c.x, c.z, t) - 0.10;
+  }
+  // Round clock. First crew to TARGET ends the generation; a stalled round is
+  // called on the leader so the experiment can't wedge.
+  evo.roundT += dt;
+  if(!genPending){
+    const top = bases.reduce((a,b)=> b.score > a.score ? b : a, bases[0]);
+    if(top.score >= evo.target)          genPending = 'target';
+    else if(evo.roundT >= evo.maxRoundT) genPending = 'timeout';
+  }
+
+  // Compact the chest list occasionally. Collected entries used to linger for
+  // the whole session, so every think() scanned an ever-growing dead list.
+  sweepCd -= dt;
+  if(sweepCd <= 0){ sweepCd = 4; treasure = treasure.filter(c => !c.taken); }
+
   // treasure top-up
-  if(treasure.filter(x=>!x.taken).length < 26 && Math.random() < dt*3.2) spawnTreasure();
+  // Far fewer chests than before, and the rate is a world lever now: scarcity
+  // changes which personality wins, which is the point of having the slider.
+  if(treasure.filter(x=>!x.taken).length < world.cap && Math.random() < dt*1.05*world.spawn) spawnTreasure();
 
   for(const s of ships){
     if(!s.alive){
+      if(s.sinking > 0){
+        // Settle by the stern, roll over, and slide under.
+        s.sinking -= dt;
+        const p = 1 - Math.max(0, s.sinking)/5.0;
+        s.outer.position.y = waveH(s.x, s.z, t) - 0.35 - p*p*7.5;
+        s.tilt.rotation.x = -p*0.75;
+        s.tilt.rotation.z = p*0.95;
+        if(s.sinking <= 0){
+          s.outer.visible = false;
+          s.tilt.rotation.x = 0; s.tilt.rotation.z = 0;
+        }
+      }
       s.respawn -= dt;
       if(s.respawn <= 0){
         const b = bases[s.fi];
-        s.alive=true; s.hull=3; s.crew=3; s.cargo=0;
-        s.x = b.x + (Math.random()-0.5)*12;
-        s.z = b.z + (Math.random()-0.5)*12;
+        s.alive=true; s.hp=MAX_HP; s.crew=3; s.cargo=0; s.vx=0; s.vz=0; s.spd=0;
+        s.state='SEEK'; s.target=null; s.sinking=0; s.alarm=0; s.alarmBy=null; releaseBerth(s);
+        s.gunCd = 2; s.gunning = false;
+        if(s.hauling){ s.hauling.claimed = null; s.hauling = null; }
+        const sp = seaSpot(b);
+        s.x = sp.x; s.z = sp.z;
         s.outer.visible = true;
         setCrew(s);
       }
@@ -968,11 +2071,79 @@ function step(dt, t){
     }
 
     s.cd -= dt;
+    s.gunCd -= dt;
+    if(s.alarm > 0) s.alarm -= dt;
+    stepHands(s, dt);
+
+    // ---- gunnery -------------------------------------------------------
+    // A hunting ship steers for a station abeam of her prey rather than straight
+    // at her, because a bow-on approach can never bring a gun to bear. The
+    // circling that produces is what creates firing windows.
+    let attackPt = null;
+    if(s.state === 'HUNT' && s.target && s.target.alive){
+      const o = s.target;
+      const dx = s.x - o.x, dz = s.z - o.z, d = Math.hypot(dx, dz) || 1;
+      if(d < GUN_RANGE*1.2){
+        // Circle in whichever direction she is already swinging.
+        const spin = (s.vx*(-dz/d) + s.vz*(dx/d)) >= 0 ? 1 : -1;
+        const px = -dz/d*spin, pz = dx/d*spin;
+        const STANDOFF = 13;
+        attackPt = { x: o.x + (dx/d)*STANDOFF*0.55 + px*STANDOFF,
+                     z: o.z + (dz/d)*STANDOFF*0.55 + pz*STANDOFF };
+      }
+    }
+    if(s.gunCd <= 0 && !s.gunning && !s.hauling && s.hands && s.hands.length >= 2){
+      const prey = gunTarget(s);
+      if(prey){
+        const side = bearing(s, prey);
+        if(side){
+          const station = s.gunStations[side === 1 ? 1 : '-1'];
+          const hand = assignTask(s, 'GUN', station, 1.5, {target: prey, side});
+          if(hand) s.gunning = true;
+        }
+      }
+    }
+
+    if(s.state === 'DOCKED'){
+      const b = bases[s.fi];
+      // Warp the last of the way alongside, then hold her there.
+      const berth = s.berth || claimBerth(s, b);
+      if(!berth){ s.state = 'RETURN'; continue; }
+      s.x += (berth.x - s.x) * Math.min(1, dt*1.6);
+      s.z += (berth.z - s.z) * Math.min(1, dt*1.6);
+      s.vx *= Math.max(0, 1 - dt*3); s.vz *= Math.max(0, 1 - dt*3);
+      s.spd *= Math.max(0, 1 - dt*3);
+      let dh = berth.ang - s.heading;
+      while(dh >  Math.PI) dh -= Math.PI*2;
+      while(dh < -Math.PI) dh += Math.PI*2;
+      s.heading += dh * Math.min(1, dt*1.4);   // swing parallel to the pier
+      s.heel += (0 - s.heel) * Math.min(1, dt*2);
+
+      // Send a chest ashore at a walking interval, up to two porters in the air.
+      s.undockCd -= dt;
+      const mine = porters.reduce((n,p)=> n + (p.ship === s ? 1 : 0), 0);
+      if(s.cargo > 0 && mine < 2 && s.undockCd <= 0){
+        s.cargo--;
+        s.undockCd = 1.6;
+        spawnPorter(s, b);
+      }
+      if(s.cargo === 0 && mine === 0){
+        s.hp = Math.min(MAX_HP, s.hp + 34);    // patched up while she is alongside
+        if(s.crew < MAX_CREW && Math.random() < 0.5){ s.crew++; setCrew(s); }
+        releaseBerth(s);
+        s.state = 'SEEK'; s.target = null;
+      }
+      poseShip(s, dt, t);
+      continue;
+    }
+
     if(!s.target || Math.random() < dt*1.4) think(s);
 
     let tx, tz;
     if(s.state==='HUNT' && s.target && s.target.alive===false) think(s);
-    if(s.target){ tx = s.target.x; tz = s.target.z; } else { tx=s.x; tz=s.z; }
+    if(attackPt){ tx = attackPt.x; tz = attackPt.z; }
+    else if(s.target){ tx = s.target.x; tz = s.target.z; }
+    else { tx = s.x; tz = s.z; }
 
     // sheer away from land — bend the target rather than the decision
     for(const isl of islands){
@@ -985,17 +2156,36 @@ function step(dt, t){
       }
     }
 
-    // steer
+    // ---- steering ----------------------------------------------------
+    // A hull under sail carries way. Heading eases toward the bearing, rudder
+    // authority falls off as she loses speed, and she keeps a velocity vector
+    // that only slowly aligns with where she points — which is the slide.
     const want = Math.atan2(tx-s.x, tz-s.z);
     let da = want - s.heading;
     while(da >  Math.PI) da -= Math.PI*2;
     while(da < -Math.PI) da += Math.PI*2;
-    s.heading += Math.max(-1.9*dt, Math.min(1.9*dt, da*2.2*dt*3));
 
-    // move — heavier holds sail slower
-    const speed = BASE_SPD * (1 + (s.crew-3)*0.035) * (1 - s.cargo*0.07);
-    s.x += Math.sin(s.heading)*speed*dt;
-    s.z += Math.cos(s.heading)*speed*dt;
+    const cruise = BASE_SPD * (1 + (s.crew-3)*0.035) * (1 - s.cargo*0.07);
+    const way    = Math.min(1, s.spd / (cruise*0.55));   // water over the rudder
+    const rate   = 0.62 * way;                           // rad/s at full way
+    const turn   = Math.max(-rate*dt, Math.min(rate*dt, da*1.5*dt));
+    s.heading += turn;
+
+    // Sail power falls off when she is not pointing where she wants to go, so
+    // she slows through a turn and accelerates out of it.
+    const aim = 0.45 + 0.55*Math.max(0, Math.cos(da));
+    s.spd += ((cruise*aim) - s.spd) * Math.min(1, dt*0.55);
+
+    // Velocity leans toward the heading rather than snapping to it: leeway.
+    const fx = Math.sin(s.heading)*s.spd, fz = Math.cos(s.heading)*s.spd;
+    const grip = Math.min(1, dt*1.35);
+    s.vx += (fx - s.vx)*grip;
+    s.vz += (fz - s.vz)*grip;
+    s.x  += s.vx*dt;
+    s.z  += s.vz*dt;
+
+    // Heel into the turn, eased so she rolls rather than snapping over.
+    s.heel += ((-turn/Math.max(dt,1e-4))*0.30 - s.heel) * Math.min(1, dt*2.2);
 
     // keep inside the sea
     const r = Math.hypot(s.x, s.z);
@@ -1010,44 +2200,100 @@ function step(dt, t){
       }
     }
 
-    // pick up treasure
-    for(const tr of treasure){
-      if(tr.taken) continue;
-      if(s.cargo >= CAPACITY) break;
-      if(dist(s.x,s.z,tr.x,tr.z) < 3.0){
-        tr.taken = true;
-        scene.remove(tr.mesh);
-        s.cargo++;
+    // ---- hull-to-hull collision ---------------------------------------
+    // Ships shoulder each other aside instead of passing through. Damage scales
+    // with closing speed: a glancing nudge is free, a T-bone hurts both parties.
+    for(const o of ships){
+      if(o === s || !o.alive) continue;
+      const dx = s.x-o.x, dz = s.z-o.z;
+      const d = Math.hypot(dx, dz);
+      const minD = 3.2;                        // two half-beams plus a fender
+      if(d >= minD || d < 1e-4) continue;
+      const nx = dx/d, nz = dz/d;
+      const push = (minD - d) * 0.5;           // separate both, half each
+      s.x += nx*push;  s.z += nz*push;
+      o.x -= nx*push;  o.z -= nz*push;
+      const closing = (o.vx - s.vx)*nx + (o.vz - s.vz)*nz;
+      if(closing > 0){
+        const j = closing * 0.55;              // inelastic exchange along the normal
+        s.vx += nx*j;  s.vz += nz*j;
+        o.vx -= nx*j;  o.vz -= nz*j;
+        s.spd *= 0.72; o.spd *= 0.72;
+        const dmg = Math.min(14, closing*1.3);
+        if(dmg > 0.6){
+          s.hp -= dmg; o.hp -= dmg;
+          if(s.hp <= 0) sink(s);
+          if(o.hp <= 0) sink(o);
+        }
+      }
+    }
+    if(!s.alive) continue;
+
+    // ---- keep clear of the works ----------------------------------------
+    // Distance is measured to the pier as a line segment, not a point, so a
+    // hull can't slide in over the planking at an angle.
+    // Two constraints that can fight each other — pushing off the pier can shove
+    // a hull onto the quay and vice versa — so relax them together.
+    if(s.state !== 'DOCKED') for(let pass=0; pass<4; pass++){
+      for(const bb of bases){
+        const ax = bb.pierA.x, az = bb.pierA.z, bx = bb.pierB.x, bz = bb.pierB.z;
+        const ex = bx-ax, ez = bz-az;
+        const tt = Math.max(0, Math.min(1, ((s.x-ax)*ex + (s.z-az)*ez) / (ex*ex + ez*ez)));
+        const cx = ax + ex*tt, cz = az + ez*tt;
+        let dx = s.x-cx, dz = s.z-cz, d = Math.hypot(dx, dz);
+        const clearPier = PIER.w/2 + 1.35;
+        if(d < clearPier && d > 1e-4){
+          s.x = cx + dx/d*clearPier; s.z = cz + dz/d*clearPier;
+          s.vx *= 0.4; s.vz *= 0.4;
+        }
+        dx = s.x-bb.x; dz = s.z-bb.z; d = Math.hypot(dx, dz);
+        const clearQuay = bb.quayR + 1.6;             // and off the stonework itself
+        if(d < clearQuay && d > 1e-4){
+          s.x = bb.x + dx/d*clearQuay; s.z = bb.z + dz/d*clearQuay;
+          s.vx *= 0.4; s.vz *= 0.4;
+        }
       }
     }
 
-    // deliver
+    // ---- fishing a chest out of the water ------------------------------
+    // No longer instant. The ship heaves to, a hand walks to the fishing
+    // station at the rail, works it for two seconds, then walks back.
+    if(!s.hauling && s.cargo < CAPACITY){
+      for(const tr of treasure){
+        if(tr.taken || tr.claimed) continue;
+        if(dist(s.x, s.z, tr.x, tr.z) < 4.2){
+          const st = SHIP_STYLE[s.fi];
+          const hand = assignTask(s, 'HAUL', [st.beam*0.30, LEN*0.12], 2.0, tr);
+          if(hand){ tr.claimed = s; s.hauling = tr; }
+          break;
+        }
+      }
+    }
+    if(s.hauling){
+      if(s.hauling.taken || s.cargo >= CAPACITY){ s.hauling.claimed = null; s.hauling = null; }
+      else s.spd *= 0.90;                     // heave to while the hand works
+    }
+
+    // ---- coming alongside ----------------------------------------------
+    // A loaded ship makes for her own pier, not the middle of the fortress, and
+    // has to lie alongside and be unloaded chest by chest before she sails.
     const b = bases[s.fi];
-    if(s.cargo > 0 && dist(s.x,s.z,b.x,b.z) < 10){
-      b.score += s.cargo; s.hauled += s.cargo; s.cargo = 0;
-      if(s.hull < 3) s.hull++;
-      if(s.crew < MAX_CREW && Math.random()<0.3){ s.crew++; setCrew(s); }
+    if(s.cargo > 0 && s.state !== 'DOCKED' && s.berth &&
+       dist(s.x, s.z, s.berth.x, s.berth.z) < 3.2){
+      s.state = 'DOCKED';
+      s.target = null;
+      s.undockCd = 0;
     }
 
     // combat
     if(s.cd <= 0){
       for(const o of ships){
         if(!o.alive || o.fi===s.fi || o.cd>0) continue;
-        if(dist(s.x,s.z,o.x,o.z) < 4.2){ fight(s,o); break; }
+        // boarding actions are gone: everything is settled by gunfire now
       }
     }
 
-    // ---- presentation ----
-    const h  = waveH(s.x, s.z, t);
-    const hx = waveH(s.x+1.4, s.z, t) - waveH(s.x-1.4, s.z, t);
-    const hz = waveH(s.x, s.z+1.4, t) - waveH(s.x, s.z-1.4, t);
-    s.outer.position.set(s.x, h - 0.35, s.z);
-    s.outer.rotation.y = s.heading;
-    s.sway += dt;
-    s.tilt.rotation.x =  hz*0.20 + Math.sin(s.sway*1.15)*0.030;
-    s.tilt.rotation.z = -hx*0.24 + Math.sin(s.sway*0.83+1.3)*0.055;
-    s.flag.rotation.y = Math.sin(t*2.2 + s.sway)*0.35;
-    for(let i=0;i<CAPACITY;i++) s.crates[i].visible = i < s.cargo;
+    poseShip(s, dt, t);
   }
 
   // bob the loose treasure
@@ -1056,6 +2302,23 @@ function step(dt, t){
     tr.mesh.position.y = waveH(tr.x, tr.z, t) + 0.25;
     tr.mesh.rotation.z = Math.sin(t*1.1 + tr.x)*0.08;
   }
+
+  stepPorters(dt);
+  stepShots(dt, t);
+}
+
+function poseShip(s, dt, t){
+  const h  = waveH(s.x, s.z, t);
+  const hx = waveH(s.x+1.4, s.z, t) - waveH(s.x-1.4, s.z, t);
+  const hz = waveH(s.x, s.z+1.4, t) - waveH(s.x, s.z-1.4, t);
+  s.outer.position.set(s.x, h - 0.35, s.z);
+  s.outer.rotation.y = s.heading;
+  s.sway += dt;
+  s.tilt.rotation.x =  hz*0.20 + Math.sin(s.sway*1.15)*0.030;
+  // wave roll, natural sway, and the heel she carries through a turn
+  s.tilt.rotation.z = -hx*0.24 + Math.sin(s.sway*0.83+1.3)*0.055 + s.heel;
+  s.flag.rotation.y = Math.sin(t*2.2 + s.sway)*0.35;
+  for(let i=0;i<CAPACITY;i++) s.crates[i].visible = i < s.cargo;
 }
 
 // ---------- camera rig (hand-rolled: no OrbitControls in r128) ----------
@@ -1063,7 +2326,113 @@ const cam = {
   target:new THREE.Vector3(0,0,0),
   dist:150, az:Math.PI*0.25, pol:0.30, follow:false
 };
+// ---------- free camera ----------
+// Minecraft-style creative flight: WASD to move, mouse to look, Space/Shift for
+// altitude. Pointer lock so the cursor doesn't fall off the window mid-turn.
+// The orbit rig is untouched; leaving free cam restores it exactly as it was.
+const free = {
+  on:false, dragging:false, pos:new THREE.Vector3(0, 30, 90),
+  yaw:Math.PI, pitch:-0.25, spd:34,
+  keys:Object.create(null)
+};
+function freeForward(){
+  return new THREE.Vector3(
+    Math.sin(free.yaw)*Math.cos(free.pitch),
+    Math.sin(free.pitch),
+    Math.cos(free.yaw)*Math.cos(free.pitch)
+  );
+}
+function enterFree(){
+  if(free.on) return;
+  free.on = true;
+  free.pos.copy(camera.position);            // start exactly where the orbit cam was
+  const dx = cam.target.x - camera.position.x, dy = cam.target.y - camera.position.y,
+        dz = cam.target.z - camera.position.z;
+  free.yaw   = Math.atan2(dx, dz);
+  free.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+  cam.follow = false; syncFollowBtn();
+  syncFreeBtn();
+}
+function exitFree(){
+  if(!free.on) return;
+  free.on = false;
+  free.keys = Object.create(null);
+  free.dragging = false;
+  applyCam();
+  syncFreeBtn();
+}
+// Look is drag-based rather than pointer-locked. Lock fails silently during the
+// browser's post-Escape cooldown and there is no way to detect that cleanly, so
+// dragging is simply more reliable — and it composes with WASD fine.
+function stepFree(dt){
+  const f = freeForward();
+  const r = new THREE.Vector3(-f.z, 0, f.x).normalize();   // cross(forward, up) = screen right
+  const k = free.keys;
+  let mx = 0, mz = 0, my = 0;
+  if(k['w']) mz += 1;
+  if(k['s']) mz -= 1;
+  if(k['d']) mx += 1;
+  if(k['a']) mx -= 1;
+  if(k[' ']) my += 1;
+  if(k['shift']) my -= 1;
+  const boost = k['control'] ? 2.6 : 1;
+  const v = free.spd * boost * dt;
+  free.pos.addScaledVector(f, mz*v).addScaledVector(r, mx*v);
+  free.pos.y += my*v;
+  free.pos.y = Math.max(1.5, Math.min(600, free.pos.y));
+  camera.position.copy(free.pos);
+  camera.lookAt(free.pos.x + f.x, free.pos.y + f.y, free.pos.z + f.z);
+}
+addEventListener('keydown', e=>{
+  const k = e.key.toLowerCase();
+  if(k === 'f' && !e.repeat && !/^(input|textarea|select)$/i.test((e.target.tagName||''))){
+    free.on ? exitFree() : enterFree(); return;
+  }
+  if(!free.on) return;
+  if(k === ' ' || k === 'shift' || k === 'control' || 'wasd'.includes(k)){
+    free.keys[k] = true;
+    if(k === ' ') e.preventDefault();
+  }
+});
+addEventListener('keyup', e=>{ free.keys[e.key.toLowerCase()] = false; });
+addEventListener('blur', ()=>{ free.keys = Object.create(null); });
+canvas.addEventListener('pointermove', e=>{
+  if(!free.on || !free.dragging) return;
+  free.yaw   -= e.movementX * 0.0040;
+  free.pitch -= e.movementY * 0.0040;
+  free.pitch  = Math.max(-1.52, Math.min(1.52, free.pitch));   // stop short of the poles
+});
+
+// ---------- stats overlay ----------
+// HTML tags projected from world space. Cheap at a dozen ships, and it gives
+// crew task timers somewhere to live once actions start taking time.
+let showStats = false;
+const tagBox = document.getElementById('tags');
+const _proj = new THREE.Vector3();
+function drawTags(){
+  if(!showStats) return;
+  let html = '';
+  for(const s of ships){
+    if(!s.alive) continue;
+    _proj.set(s.x, waveH(s.x, s.z, simT) + 7.2, s.z);   // above the masthead
+    _proj.project(camera);
+    if(_proj.z > 1) continue;                            // behind the camera
+    const sx = (_proj.x*0.5 + 0.5)*innerWidth;
+    const sy = (-_proj.y*0.5 + 0.5)*innerHeight;
+    const pct = Math.max(0, Math.min(1, s.hp/MAX_HP));
+    const col = pct > 0.6 ? '#5fd08a' : pct > 0.3 ? '#e8c34a' : '#e05a4a';
+    const timer = s.cd > 0 ? ' · reload ' + s.cd.toFixed(1) + 's' : '';
+    html += '<div class="tag" style="left:' + sx.toFixed(0) + 'px;top:' + sy.toFixed(0) + 'px">'
+          + FACTIONS[s.fi].name + ' · ' + Math.max(0, Math.round(s.hp))
+          + '<div class="bar"><i style="width:' + (pct*100).toFixed(0) + '%;background:' + col + '"></i></div>'
+          + '<div class="act">' + s.state + ' · hold ' + s.cargo + '/' + CAPACITY
+          + ' · crew ' + s.crew + timer + '</div></div>';
+  }
+  tagBox.innerHTML = html;
+}
+
 function applyCam(){
+  if(free.on) return;
   cam.pol = Math.max(0.06, Math.min(1.50, cam.pol));
   cam.dist = Math.max(14, Math.min(320, cam.dist));
   const y = Math.cos(cam.pol)*cam.dist;
@@ -1077,6 +2446,11 @@ function applyCam(){
 }
 let drag=null, lx=0, ly=0;
 canvas.addEventListener('pointerdown', e=>{
+  if(free.on){
+    free.dragging = true;
+    try{ canvas.setPointerCapture(e.pointerId); }catch(_){}   // not all pointer ids capture
+    return;
+  }
   drag = (e.button===2 || e.shiftKey) ? 'pan' : 'orbit';
   lx=e.clientX; ly=e.clientY; canvas.setPointerCapture(e.pointerId);
 });
@@ -1097,6 +2471,7 @@ addEventListener('pointerup', ()=>drag=null);
 canvas.addEventListener('contextmenu', e=>e.preventDefault());
 canvas.addEventListener('wheel', e=>{
   e.preventDefault();
+  if(free.on){ free.spd = Math.max(6, Math.min(180, free.spd * (1 - Math.sign(e.deltaY)*0.14))); return; }
   cam.dist *= (1 + Math.sign(e.deltaY)*0.11);
   applyCam();
 }, {passive:false});
@@ -1123,7 +2498,10 @@ function drawInspector(){
   iEl('i-who').style.color   = '#'+new THREE.Color(f.color).getHexString();
   iEl('i-crew').textContent  = picked.alive ? picked.crew + ' / ' + MAX_CREW : '—';
   iEl('i-hold').textContent  = picked.cargo + ' / ' + CAPACITY;
-  iEl('i-hull').textContent  = picked.alive ? '█'.repeat(picked.hull) + '░'.repeat(3-picked.hull) : 'sunk';
+  const pips = Math.max(0, Math.round(picked.hp/MAX_HP*10));
+  iEl('i-hull').textContent  = picked.alive
+    ? '█'.repeat(pips) + '░'.repeat(10-pips) + '  ' + Math.max(0, Math.round(picked.hp)) + '%'
+    : 'sunk';
   iEl('i-state').textContent = picked.alive ? picked.state.toLowerCase() : 'refitting';
   iEl('i-haul').textContent  = picked.hauled;
   iEl('i-doc').textContent   = f.doc;
@@ -1155,21 +2533,232 @@ function drawLedger(){
   });
 }
 
+// ---------- evolution lab: charts ----------
+const hex = c => '#' + (c>>>0).toString(16).padStart(6,'0');
+const FCOL = FACTIONS.map(f => hex(f.color));
+
+// Chart sizes are fixed constants, never measured. Deriving the backing store
+// from clientWidth while CSS derives layout from the backing store is a feedback
+// loop that either collapses or runs away.
+const CHART = { 'c-radar':[252,196], 'c-drift':[252,184], 'c-wins':[252,76] };
+function ctxOf(id){
+  const cv = document.getElementById(id);
+  if(!cv || !cv.getContext) return null;
+  const [w, h] = CHART[id];
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if(cv.width !== w*dpr){ cv.width = w*dpr; cv.height = h*dpr; }
+  const g = cv.getContext('2d');
+  if(!g) return null;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);           // draw in CSS pixels throughout
+  g.clearRect(0, 0, w, h);
+  return {g, w, h};
+}
+
+// Four traits on four axes. All factions overlaid, so convergence is visible as
+// the four shapes sliding on top of one another.
+function drawRadar(){
+  const c = ctxOf('c-radar'); if(!c) return;
+  const {g, w, h} = c;
+  const cx = w/2, cy = h/2 + 4, R = Math.min(w, h)*0.36;
+  const ax = TRAITS.map((t,i)=>{
+    const a = -Math.PI/2 + (i/TRAITS.length)*Math.PI*2;
+    return {t, a, x:Math.cos(a), y:Math.sin(a)};
+  });
+  g.lineWidth = 1;
+  for(const r of [0.25, 0.5, 0.75, 1]){          // rings
+    g.strokeStyle = 'rgba(255,255,255,' + (r===1?0.22:0.09) + ')';
+    g.beginPath();
+    ax.forEach((p,i)=>{ const X=cx+p.x*R*r, Y=cy+p.y*R*r; i?g.lineTo(X,Y):g.moveTo(X,Y); });
+    g.closePath(); g.stroke();
+  }
+  g.strokeStyle = 'rgba(255,255,255,.12)';
+  for(const p of ax){ g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+p.x*R, cy+p.y*R); g.stroke(); }
+  g.fillStyle = 'rgba(220,235,245,.55)';
+  g.font = '9px ui-monospace,monospace';
+  ax.forEach(p=>{
+    g.textAlign = Math.abs(p.x) < 0.3 ? 'center' : (p.x > 0 ? 'left' : 'right');
+    g.fillText(p.t.slice(0,4), cx + p.x*(R+11), cy + p.y*(R+11) + 3);
+  });
+  FACTIONS.forEach((f,fi)=>{
+    g.beginPath();
+    ax.forEach((p,i)=>{
+      const v = f[p.t], X = cx+p.x*R*v, Y = cy+p.y*R*v;
+      i ? g.lineTo(X,Y) : g.moveTo(X,Y);
+    });
+    g.closePath();
+    g.strokeStyle = FCOL[fi]; g.lineWidth = 1.6; g.stroke();
+    g.fillStyle = FCOL[fi] + '22'; g.fill();
+  });
+}
+
+// One mini-chart per trait, one line per faction, x = generation.
+function drawDrift(){
+  const c = ctxOf('c-drift'); if(!c) return;
+  const {g, w, h} = c;
+  const pad = 4, cols = 2, rows = 2;
+  const cw = (w - pad*(cols+1))/cols, ch = (h - pad*(rows+1))/rows;
+  const hist = evo.history;
+  TRAITS.forEach((t, ti)=>{
+    const ox = pad + (ti%cols)*(cw+pad), oy = pad + Math.floor(ti/cols)*(ch+pad);
+    g.fillStyle = 'rgba(255,255,255,.04)'; g.fillRect(ox, oy, cw, ch);
+    g.fillStyle = 'rgba(220,235,245,.5)'; g.font = '9px ui-monospace,monospace';
+    g.textAlign = 'left'; g.fillText(t, ox+4, oy+11);
+    if(hist.length < 2){
+      g.fillStyle = 'rgba(220,235,245,.25)';
+      g.fillText('needs 2 gens', ox+4, oy+ch/2+4);
+      return;
+    }
+    const n = hist.length;
+    FACTIONS.forEach((f, fi)=>{
+      g.beginPath();
+      hist.forEach((rec, i)=>{
+        const v = rec.params[fi][t];
+        const X = ox + 3 + (i/(n-1))*(cw-6);
+        const Y = oy + ch - 4 - v*(ch-16);      // 0 at the bottom, 1 at the top
+        i ? g.lineTo(X,Y) : g.moveTo(X,Y);
+      });
+      g.strokeStyle = FCOL[fi]; g.lineWidth = 1.2; g.stroke();
+    });
+  });
+}
+
+function drawWins(){
+  const c = ctxOf('c-wins'); if(!c) return;
+  const {g, w, h} = c;
+  const total = evo.wins.reduce((a,b)=>a+b, 0);
+  const rowH = h/4;
+  FACTIONS.forEach((f, fi)=>{
+    const y = fi*rowH + 3, bh = rowH - 7;
+    const frac = total ? evo.wins[fi]/total : 0;
+    g.fillStyle = 'rgba(255,255,255,.06)'; g.fillRect(60, y, w-92, bh);
+    g.fillStyle = FCOL[fi];               g.fillRect(60, y, (w-92)*frac, bh);
+    g.fillStyle = 'rgba(220,235,245,.7)'; g.font = '10px ui-monospace,monospace';
+    g.textAlign = 'left';  g.fillText(f.name.slice(0,9), 4, y + bh - 1);
+    g.textAlign = 'right'; g.fillStyle = '#eef6fa';
+    g.fillText(String(evo.wins[fi]), w-4, y + bh - 1);
+  });
+}
+
+// ---------- manual override sliders ----------
+function buildSliders(){
+  const box = document.getElementById('sliders');
+  if(!box) return;
+  box.innerHTML = FACTIONS.map((f, fi)=>
+    '<div class="fslid"><div class="fname" style="color:' + FCOL[fi] + '">' + f.name + '</div>' +
+    TRAITS.map(t =>
+      '<div class="trow"><span>' + t.slice(0,4) + '</span>' +
+      '<input type="range" min="0" max="1" step="0.01" value="' + f[t] +
+      '" data-f="' + fi + '" data-t="' + t + '">' +
+      '<b id="mv-' + fi + '-' + t + '">' + f[t].toFixed(2) + '</b></div>').join('') +
+    '</div>').join('');
+  box.querySelectorAll && box.querySelectorAll('input').forEach(inp=>{
+    inp.oninput = e=>{
+      const fi = +e.target.dataset.f, t = e.target.dataset.t, v = parseFloat(e.target.value);
+      FACTIONS[fi][t] = v;
+      const lab = document.getElementById('mv-' + fi + '-' + t);
+      if(lab) lab.textContent = v.toFixed(2);
+      drawRadar();
+    };
+  });
+}
+function syncSliders(){
+  FACTIONS.forEach((f, fi)=> TRAITS.forEach(t=>{
+    const lab = document.getElementById('mv-' + fi + '-' + t);
+    if(lab) lab.textContent = f[t].toFixed(2);
+  }));
+  const box = document.getElementById('sliders');
+  if(box && box.querySelectorAll) box.querySelectorAll('input').forEach(inp=>{
+    inp.value = FACTIONS[+inp.dataset.f][inp.dataset.t];
+  });
+}
+
+function drawLab(){
+  const gEl = document.getElementById('l-gen'), lEl = document.getElementById('l-lead'),
+        tEl = document.getElementById('l-tgt');
+  if(gEl) gEl.textContent = evo.gen;
+  if(tEl) tEl.textContent = evo.target;
+  // The lab UI initialises before the strongholds are built, so tolerate an
+  // empty board on the first call.
+  if(lEl && bases.length){
+    const top = bases.reduce((a,b)=> b.score > a.score ? b : a, bases[0]);
+    lEl.textContent = FACTIONS[top.faction].name + ' ' + top.score;
+  }
+  if(!labOpen) return;
+  drawRadar(); drawDrift(); drawWins(); syncSliders();
+}
+
 // ---------- controls ----------
 let paused=false, rate=1;
 const bFollow = document.getElementById('b-follow');
 const syncFollowBtn = ()=>bFollow.classList.toggle('on', cam.follow);
+const bFree = document.getElementById('b-free');
+const syncFreeBtn = ()=>{
+  bFree.classList.toggle('on', free.on);
+  // The old key hints moved into the Controls panel; nothing else to sync.
+};
 
 document.getElementById('b-top').onclick = ()=>{
   cam.follow=false; syncFollowBtn();
   cam.target.set(0,0,0); cam.dist=150; cam.az=Math.PI*0.25; cam.pol=0.30; applyCam();
 };
 bFollow.onclick = ()=>{ cam.follow = !cam.follow; syncFollowBtn(); if(cam.follow) cam.dist=Math.min(cam.dist,34); };
+document.getElementById('b-free').onclick = ()=> free.on ? exitFree() : enterFree();
+document.getElementById('b-stats').onclick = e=>{
+  showStats = !showStats;
+  e.target.classList.toggle('on', showStats);
+  if(!showStats) tagBox.innerHTML = '';
+};
 document.getElementById('b-pause').onclick = e=>{
   paused=!paused; e.target.classList.toggle('on', paused);
   e.target.textContent = paused ? 'Resume' : 'Pause';
 };
-document.getElementById('spd').oninput = e=> rate = parseFloat(e.target.value);
+// Speed is logarithmic: 0.1x crawl for watching a single manoeuvre, up to 60x
+// for burning through generations. Sub-stepping below keeps physics stable.
+const SPD_MIN = 0.1, SPD_MAX = 60;
+const sliderToRate = v => SPD_MIN * Math.pow(SPD_MAX/SPD_MIN, v/100);
+const spdEl = document.getElementById('spd'), spdVal = document.getElementById('v-spd');
+function syncSpeed(){
+  rate = sliderToRate(parseFloat(spdEl.value));
+  if(spdVal) spdVal.textContent = (rate < 1 ? rate.toFixed(2) : rate.toFixed(1)) + 'x';
+}
+spdEl.oninput = syncSpeed;
+syncSpeed();
+
+// ---- lab controls ----
+let labOpen = false;
+const labBody = document.getElementById('labbody');
+document.getElementById('b-lab').onclick = e=>{
+  labOpen = !labOpen;
+  labBody.classList.toggle('open', labOpen);
+  e.target.textContent = labOpen ? 'collapse' : 'expand';
+  if(labOpen) drawLab();
+};
+const on = (id, ev, fn)=>{ const el = document.getElementById(id); if(el) el[ev] = fn; };
+on('s-target','oninput', e=>{ evo.target = Math.max(10, parseInt(e.target.value)||100); drawLab(); });
+on('s-evo',   'onchange',e=>{ evo.on = e.target.checked; });
+on('s-shuf',  'onchange',e=>{ evo.shuffle = e.target.checked; });
+on('s-mut',   'oninput', e=>{ evo.mut = parseFloat(e.target.value);
+  const v=document.getElementById('v-mut'); if(v) v.textContent = evo.mut.toFixed(2); });
+on('s-pull',  'oninput', e=>{ evo.pull = parseFloat(e.target.value);
+  const v=document.getElementById('v-pull'); if(v) v.textContent = evo.pull.toFixed(2); });
+on('s-spawn','oninput', e=>{ world.spawn = parseFloat(e.target.value);
+  const v=document.getElementById('v-spawn'); if(v) v.textContent = world.spawn.toFixed(2); });
+on('s-cap','oninput', e=>{ world.cap = parseInt(e.target.value);
+  const v=document.getElementById('v-cap'); if(v) v.textContent = world.cap; });
+on('b-help','onclick', ()=>{
+  const h = document.getElementById('help');
+  h.classList.toggle('on');
+});
+on('b-defaults','onclick', ()=>{
+  FACTIONS.forEach((f, i)=> TRAITS.forEach(t => f[t] = DEFAULT_PARAMS[i][t]));
+  drawLab();
+});
+on('b-endgen','onclick', ()=> endGeneration('manual'));
+on('b-clearhist','onclick', ()=>{
+  evo.history.length = 0; evo.wins = [0,0,0,0]; evo.gen = 1; drawLab();
+});
+buildSliders();
+drawLab();
 document.getElementById('b-reset').onclick = ()=> reset();
 
 addEventListener('resize', ()=>{
@@ -1178,47 +2767,186 @@ addEventListener('resize', ()=>{
 });
 
 // ---------- boot / reset ----------
+// =====================================================================
+//  EVOLUTION
+//  A round runs until one crew banks TARGET chests. That result is the whole
+//  reward signal: rank the four by score, then move each faction's four numbers.
+//  The winner jitters in place (it is near a local optimum); the losers step
+//  toward the winner's parameters in proportion to how badly they lost, plus
+//  noise. Losers explore, winners exploit. Watch the radar collapse and you are
+//  watching the population agree on what the optimal pirate is.
+// =====================================================================
+
+// Box-Muller, so mutation is gaussian rather than uniform — small drifts are
+// common, the occasional large jump is what escapes a local optimum.
+function gauss(){
+  let u = 0, v = 0;
+  while(u === 0) u = Math.random();
+  while(v === 0) v = Math.random();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+const clamp01 = x => Math.max(0, Math.min(1, x));
+
+function snapshotParams(){
+  return FACTIONS.map(f => TRAITS.reduce((o,t)=>(o[t]=f[t], o), {}));
+}
+
+function evolve(order){
+  // order: faction indices, best first
+  const champ = FACTIONS[order[0]];
+  order.forEach((fi, rank) => {
+    const f = FACTIONS[fi];
+    for(const t of TRAITS){
+      if(rank === 0){
+        f[t] = clamp01(f[t] + gauss()*evo.mut*0.35);       // exploit: jitter only
+      }else{
+        const imitate = (champ[t] - f[t]) * evo.pull * (rank/(order.length-1));
+        f[t] = clamp01(f[t] + imitate + gauss()*evo.mut);   // explore, biased at the winner
+      }
+    }
+  });
+}
+
+// Move each stronghold to a different corner so board position can't be the
+// hidden variable behind a winning streak. The architecture travels with its
+// faction, and the corner set is symmetric, so the islands stay valid.
+// World-space dock points, derived from the base's own rotation so they follow
+// the stronghold when the corners are shuffled.
+function placeDock(b){
+  if(b.quayR === undefined) b.quayR = 8;
+  const ang = Math.atan2(-b.x, -b.z);          // same bearing the group is rotated to
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const toWorld = (lx, lz) => ({ x: b.x + lx*ca + lz*sa, z: b.z - lx*sa + lz*ca });
+  b.head  = toWorld(0, PIER.to - 1.2);           // pier head, first waypoint ashore
+  b.cave  = toWorld(0, b.quayR + 0.15);          // the gated mouth
+  b.dockAng = ang;
+  b.pierA = { x: b.x, z: b.z };                  // run the segment to the centre so
+                                                 // the two exclusions never disagree
+  b.pierB = toWorld(0, PIER.to);                 // seaward end
+
+  // Four separate berths, two down each side of the pier. Ships used to share a
+  // single mooring point and pile into each other; now each claims its own.
+  const zNear = b.quayR + 1.8, zFar = PIER.to - 2.6;
+  b.berths = [];
+  for(const side of [-1, 1]){
+    for(const lz of [zNear, zFar]){
+      const p = toWorld(side*PIER.side, lz);
+      // Gangway: the point on the pier itself abreast of this berth. Porters
+      // start here, not at the ship — they were walking on open water before.
+      const gw = toWorld(side*(PIER.w/2 - 0.3), lz);
+      b.berths.push({ x:p.x, z:p.z, gw, ang: ang + (side > 0 ? Math.PI : 0), taken: null });
+    }
+  }
+  b.hold = toWorld(0, PIER.to + 9);              // loiter here if every berth is full
+}
+
+function claimBerth(s, b){
+  if(s.berth && s.berth.taken === s) return s.berth;
+  const free = b.berths.find(x => !x.taken || !x.taken.alive);
+  if(!free) return null;
+  free.taken = s; s.berth = free;
+  return free;
+}
+function releaseBerth(s){
+  if(s.berth && s.berth.taken === s) s.berth.taken = null;
+  s.berth = null;
+}
+
+function shuffleCorners(){
+  const order = [0,1,2,3];
+  for(let i=3;i>0;i--){ const j=(Math.random()*(i+1))|0; [order[i],order[j]]=[order[j],order[i]]; }
+  bases.forEach((b, i) => {
+    const [x, z] = CORNERS[order[i]];
+    b.x = x; b.z = z;
+    b.mesh.position.set(x, 0, z);
+    b.mesh.rotation.y = Math.atan2(-x, -z);     // keep facing the open sea
+    placeDock(b);                                // dock points travel with it
+  });
+  TREASURE_ZONES.length = 0;
+  buildTreasureZones();                          // banks are derived from base positions
+}
+
+function endGeneration(reason){
+  const order = bases.map((b,i)=>i).sort((a,b)=>bases[b].score - bases[a].score);
+  const winner = order[0];
+  evo.wins[winner]++;
+  evo.history.push({
+    gen: evo.gen,
+    winner,
+    reason,
+    secs: Math.round(evo.roundT),
+    scores: bases.map(b=>b.score),
+    params: snapshotParams()                     // parameters that produced this result
+  });
+  if(evo.history.length > 400) evo.history.shift();
+  if(evo.on) evolve(order);
+  if(evo.shuffle) shuffleCorners();
+  evo.gen++;
+  evo.roundT = 0;
+  reset();
+  drawLab();
+}
+
 function reset(){
   for(const s of ships) scene.remove(s.outer);
   for(const t of treasure) if(!t.taken) scene.remove(t.mesh);
+  for(const p of shots) scene.remove(p.mesh);
+  for(const p of porters) scene.remove(p.g);
+  shots.length = 0; porters.length = 0;
   ships = []; treasure = []; shipHulls.length = 0; picked = null;
   bases.forEach(b=>b.score=0);
   for(let i=0;i<FACTIONS.length;i++) for(let k=0;k<3;k++) spawnShip(i);
-  for(let i=0;i<22;i++) spawnTreasure();
+  for(let i=0;i<Math.round(world.cap*0.7);i++) spawnTreasure();
   drawInspector(); drawLedger();
 }
 
+buildBases();
+buildTreasureZones();   // islands need the grounds mapped before they claim ground
 buildIslands();
 buildMountains();
 buildBirds();
-buildBases();
 buildLedger();
 reset();
 applyCam();
 
 // ---------- loop ----------
-let last = performance.now(), simT = 0, ledgerCd = 0;
+let last = performance.now(), lastReal = last, simT = 0, ledgerCd = 0;
 function frame(now){
   requestAnimationFrame(frame);
   let dt = Math.min((now-last)/1000, 0.05); last = now;
   if(!paused){
-    dt *= rate;
-    simT += dt;
-    step(dt, simT);
-    stepBirds(dt, simT);
+    // Run the sim in fixed slices. At 60x a single frame is a full second of
+    // sea, and integrating that in one step would let ships teleport through
+    // each other and through land. Slicing keeps collisions honest at any speed.
+    let budget = dt * rate, guard = 0;
+    while(budget > 1e-4 && guard++ < 600){
+      const h = Math.min(0.05, budget);
+      simT += h;
+      step(h, simT);
+      stepBirds(h, simT);
+      budget -= h;
+      if(genPending){ const why = genPending; genPending = null; endGeneration(why); break; }
+    }
   }
   oceanMat.uniforms.uTime.value = simT;
 
-  if(cam.follow){
-    const lead = ships.filter(s=>s.alive).sort((a,b)=>b.cargo-a.cargo || b.hauled-a.hauled)[0];
-    if(lead) cam.target.lerp(lead.outer.position, 0.06);
+  // Free cam flies on real time, so it still responds while the sim is paused.
+  const rdt = Math.min((now-lastReal)/1000, 0.05); lastReal = now;
+  if(free.on){
+    stepFree(rdt);
+  }else{
+    if(cam.follow){
+      const lead = ships.filter(s=>s.alive).sort((a,b)=>b.cargo-a.cargo || b.hauled-a.hauled)[0];
+      if(lead) cam.target.lerp(lead.outer.position, 0.06);
+    }
+    applyCam();
   }
-  applyCam();
 
   ledgerCd -= dt;
-  if(ledgerCd <= 0){ drawLedger(); if(picked) drawInspector(); ledgerCd = 0.3; }
+  if(ledgerCd <= 0){ drawLedger(); if(picked) drawInspector(); drawLab(); ledgerCd = 0.3; }
 
   renderer.render(scene, camera);
+  drawTags();          // after render, so the camera matrices are current
 }
 requestAnimationFrame(frame);
 </script>
