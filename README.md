@@ -2,7 +2,11 @@
 
 Four AI pirate crews fighting over treasure in a shared sea. They all run the exact same brain. The only thing separating them is nine numbers, and those numbers change between rounds depending on who won.
 
-**[Run it here](https://hmac10.github.io/pairates/)**, no install, no signup, it's one HTML file.
+**[Run it here](https://pairates.vercel.app/)**, no install, no signup, it's one HTML file.
+
+[![pAIrates demo](preview.png)](https://youtu.be/9MaCU-6WmJA)
+
+*30 second demo, or [watch on YouTube](https://youtu.be/9MaCU-6WmJA)*
 
 ## Why I built this
 
